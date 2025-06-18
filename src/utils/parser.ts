@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import * as pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 
 export async function parseFile(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -7,45 +7,71 @@ export async function parseFile(file: File) {
   switch (extension) {
     case 'xlsx':
     case 'xls':
-      return parseExcel(file);
+      return parseExcel(await file.arrayBuffer());
     case 'csv':
-      return parseCSV(file);
+      return parseCSV(await file.text());
     case 'pdf':
-      return parsePDF(file);
+      return parsePDF(await file.arrayBuffer());
     default:
       throw new Error('Unsupported file type');
   }
 }
 
-async function parseExcel(file: File) {
-  const buffer = await file.arrayBuffer();
+export async function parseExcel(buffer: ArrayBuffer) {
   const workbook = XLSX.read(buffer);
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-  const data = XLSX.utils.sheet_to_json(worksheet);
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(firstSheet);
   
-  return normalizeData(data);
+  return data.map((row: any) => ({
+    question: row.Question || row.question || '',
+    answer: row.Answer || row.answer || '',
+    type: 'customer_service'
+  })).filter(item => item.question && item.answer);
 }
 
-async function parseCSV(file: File) {
-  const text = await file.text();
-  const workbook = XLSX.read(text, { type: 'string' });
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-  const data = XLSX.utils.sheet_to_json(worksheet);
+export async function parseCSV(text: string) {
+  const rows = text.split('\n').map(row => row.split(','));
+  const headers = rows[0].map(header => header.trim().toLowerCase());
+  const questionIndex = headers.indexOf('question');
+  const answerIndex = headers.indexOf('answer');
   
-  return normalizeData(data);
+  if (questionIndex === -1 || answerIndex === -1) {
+    throw new Error('CSV must have "question" and "answer" columns');
+  }
+  
+  return rows.slice(1)
+    .map(row => ({
+      question: row[questionIndex]?.trim() || '',
+      answer: row[answerIndex]?.trim() || '',
+      type: 'customer_service'
+    }))
+    .filter(item => item.question && item.answer);
 }
 
-async function parsePDF(file: File) {
-  const buffer = await file.arrayBuffer();
-  const data = await pdfParse(buffer);
-  
-  // Split PDF content into sections based on headers or formatting
-  const sections = data.text.split(/\n{2,}/);
-  
-  return sections.map(section => ({
-    content: section.trim(),
-    type: 'text'
-  })).filter(item => item.content.length > 0);
+export async function parsePDF(buffer: ArrayBuffer) {
+  try {
+    const data = await pdfParse(buffer);
+    const paragraphs = data.text.split('\n\n').filter(p => p.trim());
+    
+    const scenarios = [];
+    for (let i = 0; i < paragraphs.length - 1; i += 2) {
+      const question = paragraphs[i]?.trim();
+      const answer = paragraphs[i + 1]?.trim();
+      
+      if (question && answer) {
+        scenarios.push({
+          question,
+          answer,
+          type: 'customer_service'
+        });
+      }
+    }
+    
+    return scenarios;
+  } catch (error) {
+    console.error('Error parsing PDF:', error);
+    throw new Error('Failed to parse PDF file');
+  }
 }
 
 function normalizeData(data: any[]) {
