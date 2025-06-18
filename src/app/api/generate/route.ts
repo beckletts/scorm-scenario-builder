@@ -425,7 +425,8 @@ async function extractContentFromUrl(url: string) {
     return scenarios;
   } catch (error) {
     console.error('Error extracting content from URL:', error);
-    throw new Error(`Failed to extract content from URL: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    throw new Error(`Failed to extract content from URL: ${errorMessage}`);
   }
 }
 
@@ -439,7 +440,6 @@ export async function POST(request: NextRequest) {
     let data: any[] = [];
 
     if (scenariosJson) {
-      // Parse the JSON string containing the scenarios
       data = JSON.parse(scenariosJson);
     } else if (file) {
       const buffer = await file.arrayBuffer();
@@ -489,8 +489,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error processing request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
