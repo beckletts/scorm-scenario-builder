@@ -2,6 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  images: {
+    unoptimized: true,
+  },
+  // Ensure we handle trailing slashes consistently
+  trailingSlash: false,
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -9,4 +14,6 @@ const nextConfig = {
     };
     return config;
   },
-} 
+}
+
+module.exports = nextConfig 
