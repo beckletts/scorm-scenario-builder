@@ -1,6 +1,11 @@
 {
   "name": "scorm-scenario-builder",
   "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "18.17.0",
+    "npm": ">=9.0.0"
+  },
   "description": "A tool to create SCORM-compliant customer service training scenarios",
   "main": "index.js",
   "scripts": {
