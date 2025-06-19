@@ -201,7 +201,7 @@ export default function Home() {
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="input method tabs">
               <Tab label="Paste or Upload JSON" />
               <Tab label="Video" />
-              <Tab label="URL" />
+              <Tab label="Storylane" />
               <Tab label="Upload HTML" />
             </Tabs>
           </Box>
@@ -292,15 +292,16 @@ export default function Home() {
 
             <TabPanel value={tabValue} index={2}>
               <Typography variant="body1" gutterBottom>
-                Enter a knowledge base article URL or a <b>Storylane link</b>.<br />
+                Enter a <b>Storylane link</b> below.<br />
                 <span style={{ color: '#005C9E' }}>
-                  If you enter a Storylane link (e.g., <code>https://pearson.storylane.io/share/...</code>), the generated SCORM package will embed the Storylane experience and provide a "Close" button that marks the course as completed.
+                  The generated SCORM package will embed the Storylane experience and provide a "Close" button that marks the course as completed.<br />
+                  Example: <code>https://pearson.storylane.io/share/...</code>
                 </span>
               </Typography>
               <TextField
                 fullWidth
                 name="url"
-                label="Knowledge Base Article or Storylane URL"
+                label="Storylane URL"
                 variant="outlined"
                 placeholder="https://pearson.storylane.io/share/kmkr7hvxxm5a"
                 sx={{ mb: 2 }}
