@@ -182,7 +182,7 @@ export default function Home() {
     <Container maxWidth="md">
       <Box sx={{ my: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ color: 'primary.main' }}>
-          Customer Service Scenario Builder
+          SCORM Builder
         </Typography>
         
         <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
@@ -199,7 +199,7 @@ export default function Home() {
 
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="input method tabs">
-              <Tab label="Paste or Upload JSON" />
+              <Tab label="Scenario Builder" />
               <Tab label="Video" />
               <Tab label="Storylane" />
               <Tab label="Upload HTML" />
