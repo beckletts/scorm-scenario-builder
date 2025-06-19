@@ -319,6 +319,91 @@ button:disabled {
   return files;
 }
 
+function isStorylaneUrl(url: string) {
+  return url.includes('storylane.io/share/');
+}
+
+function generateStorylaneScormFiles(storylaneUrl: string) {
+  return {
+    'imsmanifest.xml': `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="com.pearson.storylane" version="1.0"
+  xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="default_org">
+    <organization identifier="default_org">
+      <title>Pearson Storylane Experience</title>
+      <item identifier="item_1" identifierref="resource_1">
+        <title>Pearson Storylane Experience</title>
+      </item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="resource_1" type="webcontent" adlcp:scormtype="sco" href="index.html">
+      <file href="index.html"/>
+      <file href="scorm.js"/>
+      <file href="styles.css"/>
+    </resource>
+  </resources>
+</manifest>`,
+    'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pearson Storylane Experience</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="scorm.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="https://www.pearson.com/content/dam/one-dot-com/one-dot-com/global/Images/logos/Pearson_Logo_Primary_Blk_RGB.svg" alt="Pearson Logo" class="logo">
+      <h1>Pearson Storylane Experience</h1>
+    </header>
+    <main>
+      <iframe src="${storylaneUrl}" width="100%" height="600" style="border:1px solid #ccc; border-radius:8px;" allowfullscreen></iframe>
+      <div style="text-align:center; margin-top:2rem;">
+        <button id="close-btn" class="close-btn" onclick="completeAndClose()">Close</button>
+      </div>
+    </main>
+  </div>
+</body>
+</html>`,
+    'scorm.js': `function completeAndClose() {
+  if (window.parent && window.parent.API) {
+    var scorm = window.parent.API;
+    if (scorm.LMSSetValue) {
+      scorm.LMSSetValue('cmi.core.lesson_status', 'completed');
+      scorm.LMSCommit('');
+      scorm.LMSFinish('');
+    }
+  }
+  window.close();
+}
+window.onload = function() {
+  // Optionally, mark as started
+  if (window.parent && window.parent.API && window.parent.API.LMSSetValue) {
+    window.parent.API.LMSSetValue('cmi.core.lesson_status', 'incomplete');
+  }
+};`,
+    'styles.css': `
+body { font-family: 'Plus Jakarta Sans', Arial, sans-serif; background: #f8f9fa; margin: 0; }
+.container { max-width: 900px; margin: 2rem auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 2rem; }
+.logo { max-width: 200px; display: block; margin: 0 auto 1rem auto; }
+h1 { color: #005C9E; text-align: center; }
+.close-btn { background: #005C9E; color: #fff; border: none; border-radius: 4px; padding: 1rem 2rem; font-size: 1.2rem; cursor: pointer; transition: background 0.2s; }
+.close-btn:hover { background: #4A3C8C; }
+iframe { margin-top: 1rem; }
+`
+  };
+}
+
 async function extractContentFromUrl(url: string) {
   try {
     console.log('Fetching content from URL:', url);
@@ -444,7 +529,6 @@ export async function POST(request: NextRequest) {
     } else if (file) {
       const buffer = await file.arrayBuffer();
       const extension = file.name.split('.').pop()?.toLowerCase();
-
       switch (extension) {
         case 'xlsx':
         case 'xls':
@@ -461,7 +545,23 @@ export async function POST(request: NextRequest) {
           throw new Error('Unsupported file type');
       }
     } else if (url) {
-      data = await extractContentFromUrl(url);
+      if (isStorylaneUrl(url)) {
+        // Generate special SCORM package for Storylane
+        const scormFiles = generateStorylaneScormFiles(url);
+        const zip = new JSZip();
+        Object.entries(scormFiles).forEach(([path, content]) => {
+          zip.file(path, content);
+        });
+        const zipContent = await zip.generateAsync({ type: 'blob' });
+        return new NextResponse(zipContent, {
+          headers: {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename=scenario.zip'
+          }
+        });
+      } else {
+        data = await extractContentFromUrl(url);
+      }
     }
 
     if (!data || data.length === 0) {

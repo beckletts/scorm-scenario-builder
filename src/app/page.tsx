@@ -176,12 +176,18 @@ export default function Home() {
             </TabPanel>
 
             <TabPanel value={tabValue} index={2}>
+              <Typography variant="body1" gutterBottom>
+                Enter a knowledge base article URL or a <b>Storylane link</b>.<br />
+                <span style={{ color: '#005C9E' }}>
+                  If you enter a Storylane link (e.g., <code>https://pearson.storylane.io/share/...</code>), the generated SCORM package will embed the Storylane experience and provide a "Close" button that marks the course as completed.
+                </span>
+              </Typography>
               <TextField
                 fullWidth
                 name="url"
-                label="Knowledge Base Article URL"
+                label="Knowledge Base Article or Storylane URL"
                 variant="outlined"
-                placeholder="https://..."
+                placeholder="https://pearson.storylane.io/share/kmkr7hvxxm5a"
                 sx={{ mb: 2 }}
               />
             </TabPanel>
