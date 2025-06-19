@@ -517,7 +517,16 @@ export async function POST(request: NextRequest) {
     // Knowledge base article (fallback)
     let data: any[] = [];
     if (scenariosJson) {
-      data = JSON.parse(scenariosJson);
+      console.log('Received scenariosJson:', scenariosJson);
+      try {
+        data = JSON.parse(scenariosJson);
+        console.log('Parsed scenarios data:', data);
+      } catch (e) {
+        return NextResponse.json({ error: 'Invalid scenarios JSON.' }, { status: 400 });
+      }
+      if (!Array.isArray(data) || data.length === 0) {
+        return NextResponse.json({ error: 'No valid scenarios found. Please check your input.' }, { status: 400 });
+      }
     } else if (url) {
       data = await extractContentFromUrl(url);
     }
