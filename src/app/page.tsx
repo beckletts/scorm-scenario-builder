@@ -57,7 +57,9 @@ export default function Home() {
   const [scenarios, setScenarios] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [htmlFile, setHtmlFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const htmlInputRef = useRef<HTMLInputElement>(null);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -65,11 +67,18 @@ export default function Home() {
     setSuccess(false);
     setVideoUrl('');
     setVideoFile(null);
+    setHtmlFile(null);
   };
 
   const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       setVideoFile(event.target.files[0]);
+    }
+  };
+
+  const handleHtmlFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setHtmlFile(event.target.files[0]);
     }
   };
 
@@ -95,6 +104,9 @@ export default function Home() {
         if (videoFile) {
           formData.append('videoFile', videoFile);
         }
+      }
+      if (tabValue === 3 && htmlFile) {
+        formData.append('htmlFile', htmlFile);
       }
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -147,6 +159,7 @@ export default function Home() {
               <Tab label="Paste Scenarios" />
               <Tab label="Video" />
               <Tab label="URL" />
+              <Tab label="Upload HTML" />
             </Tabs>
           </Box>
 
@@ -222,6 +235,29 @@ export default function Home() {
                 variant="outlined"
                 placeholder="https://pearson.storylane.io/share/kmkr7hvxxm5a"
                 sx={{ mb: 2 }}
+              />
+            </TabPanel>
+
+            <TabPanel value={tabValue} index={3}>
+              <Typography variant="body1" gutterBottom>
+                Upload an HTML file (exported from Claude, Copilot, etc.). The app will wrap your HTML in a SCORM-compliant package and add a "Close" button that marks the course as completed.
+              </Typography>
+              <Button
+                variant="outlined"
+                component="span"
+                fullWidth
+                sx={{ height: '100px', mb: 2 }}
+                onClick={() => htmlInputRef.current?.click()}
+              >
+                {htmlFile ? htmlFile.name : 'Click to Upload HTML File'}
+              </Button>
+              <Input
+                id="html-file-input"
+                name="htmlFile"
+                type="file"
+                accept="text/html,.html"
+                ref={htmlInputRef}
+                onChange={handleHtmlFileChange}
               />
             </TabPanel>
 

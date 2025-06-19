@@ -504,6 +504,80 @@ iframe, video { margin-top: 1rem; }
   };
 }
 
+function injectScormIntoHtml(html: string): string {
+  // Add a Close button and SCORM completion script if not present
+  let injected = html;
+  // Add close button before </body>
+  if (!/id=["']close-btn["']/.test(html)) {
+    injected = injected.replace(
+      /<\/body>/i,
+      `<div style="text-align:center; margin-top:2rem;"><button id="close-btn" class="close-btn" onclick="completeAndClose()">Close</button></div></body>`
+    );
+  }
+  // Add SCORM script before </body>
+  if (!/function completeAndClose\(\)/.test(html)) {
+    injected = injected.replace(
+      /<\/body>/i,
+      `<script>
+function completeAndClose() {
+  if (window.parent && window.parent.API) {
+    var scorm = window.parent.API;
+    if (scorm.LMSSetValue) {
+      scorm.LMSSetValue('cmi.core.lesson_status', 'completed');
+      scorm.LMSCommit('');
+      scorm.LMSFinish('');
+    }
+  }
+  window.close();
+}
+window.onload = function() {
+  if (window.parent && window.parent.API && window.parent.API.LMSSetValue) {
+    window.parent.API.LMSSetValue('cmi.core.lesson_status', 'incomplete');
+  }
+};
+</script></body>`
+    );
+  }
+  // Add minimal CSS for the button if not present
+  if (!/\.close-btn/.test(html)) {
+    injected = injected.replace(
+      /<\/head>/i,
+      `<style>.close-btn { background: #005C9E; color: #fff; border: none; border-radius: 4px; padding: 1rem 2rem; font-size: 1.2rem; cursor: pointer; transition: background 0.2s; } .close-btn:hover { background: #4A3C8C; }</style></head>`
+    );
+  }
+  return injected;
+}
+
+function generateHtmlScormFiles(htmlContent: string) {
+  return {
+    'imsmanifest.xml': `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="com.pearson.html" version="1.0"
+  xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="default_org">
+    <organization identifier="default_org">
+      <title>Pearson HTML Module</title>
+      <item identifier="item_1" identifierref="resource_1">
+        <title>Pearson HTML Module</title>
+      </item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="resource_1" type="webcontent" adlcp:scormtype="sco" href="index.html">
+      <file href="index.html"/>
+    </resource>
+  </resources>
+</manifest>`,
+    'index.html': htmlContent
+  };
+}
+
 async function extractContentFromUrl(url: string) {
   try {
     console.log('Fetching content from URL:', url);
@@ -622,6 +696,25 @@ export async function POST(request: NextRequest) {
     const scenariosJson = formData.get('scenarios') as string | null;
     const videoUrl = formData.get('videoUrl') as string | null;
     const videoFile = formData.get('videoFile') as File | null;
+    const htmlFile = formData.get('htmlFile') as File | null;
+
+    // HTML file upload
+    if (htmlFile && htmlFile.size > 0) {
+      const htmlText = await htmlFile.text();
+      const injectedHtml = injectScormIntoHtml(htmlText);
+      const scormFiles = generateHtmlScormFiles(injectedHtml);
+      const zip = new JSZip();
+      Object.entries(scormFiles).forEach(([path, content]) => {
+        zip.file(path, content);
+      });
+      const zipContent = await zip.generateAsync({ type: 'blob' });
+      return new NextResponse(zipContent, {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': 'attachment; filename=scenario.zip'
+        }
+      });
+    }
 
     // Storylane
     if (url && isStorylaneUrl(url)) {
