@@ -255,6 +255,11 @@ export default function Home() {
               <Typography variant="body1" gutterBottom>
                 Enter a YouTube or Vimeo video URL, or upload a video file (MP4 recommended).
               </Typography>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <b>Accepted file types:</b> Only <b>.mp4</b> files (H.264/AAC) are supported for maximum compatibility with browsers and LMSs.<br />
+                If your video does not play, please convert it to .mp4 format.<br />
+                You can also use YouTube or Vimeo links.
+              </Alert>
               <TextField
                 fullWidth
                 name="videoUrl"
@@ -279,7 +284,7 @@ export default function Home() {
                 id="video-file-input"
                 name="videoFile"
                 type="file"
-                accept="video/mp4,video/webm,video/ogg"
+                accept="video/mp4"
                 ref={fileInputRef}
                 onChange={handleVideoFileChange}
               />
