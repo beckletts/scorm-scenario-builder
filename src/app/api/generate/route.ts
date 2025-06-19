@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { createScormPackage } from '../../utils/scorm';
+import { createScormPackage } from '../../../utils/scorm';
 
 async function parseExcel(buffer: ArrayBuffer) {
   const workbook = XLSX.read(buffer);
