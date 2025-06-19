@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Box,
   Container,
@@ -55,9 +55,22 @@ export default function Home() {
   const [success, setSuccess] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [scenarios, setScenarios] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    setError(null);
+    setSuccess(false);
+    setVideoUrl('');
+    setVideoFile(null);
+  };
+
+  const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setVideoFile(event.target.files[0]);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -68,8 +81,6 @@ export default function Home() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      
-      // If we're on the scenarios tab, parse and add scenarios to formData
       if (tabValue === 0 && scenarios) {
         const scenariosData = scenarios.split('---').map(scenario => {
           const [question, answer] = scenario.trim().split('\n\n');
@@ -77,7 +88,14 @@ export default function Home() {
         });
         formData.append('scenarios', JSON.stringify(scenariosData));
       }
-
+      if (tabValue === 1) {
+        if (videoUrl) {
+          formData.append('videoUrl', videoUrl);
+        }
+        if (videoFile) {
+          formData.append('videoFile', videoFile);
+        }
+      }
       const response = await fetch('/api/generate', {
         method: 'POST',
         body: formData,
@@ -127,8 +145,8 @@ export default function Home() {
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="input method tabs">
               <Tab label="Paste Scenarios" />
-              <Tab label="Upload File" />
-              <Tab label="Enter URL" />
+              <Tab label="Video" />
+              <Tab label="URL" />
             </Tabs>
           </Box>
 
@@ -157,22 +175,37 @@ export default function Home() {
             </TabPanel>
 
             <TabPanel value={tabValue} index={1}>
-              <label htmlFor="file-input">
-                <Input
-                  id="file-input"
-                  name="file"
-                  type="file"
-                  accept=".xlsx,.xls,.csv,.pdf"
-                />
-                <Button
-                  variant="outlined"
-                  component="span"
-                  fullWidth
-                  sx={{ height: '100px' }}
-                >
-                  Click to Upload File (XLSX, CSV, or PDF)
-                </Button>
-              </label>
+              <Typography variant="body1" gutterBottom>
+                Enter a YouTube or Vimeo video URL, or upload a video file (MP4 recommended).
+              </Typography>
+              <TextField
+                fullWidth
+                name="videoUrl"
+                label="YouTube or Vimeo URL"
+                variant="outlined"
+                value={videoUrl}
+                onChange={e => setVideoUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..."
+                sx={{ mb: 2 }}
+              />
+              <Divider sx={{ my: 2 }}>OR</Divider>
+              <Button
+                variant="outlined"
+                component="span"
+                fullWidth
+                sx={{ height: '100px', mb: 2 }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {videoFile ? videoFile.name : 'Click to Upload Video File (MP4)'}
+              </Button>
+              <Input
+                id="video-file-input"
+                name="videoFile"
+                type="file"
+                accept="video/mp4,video/webm,video/ogg"
+                ref={fileInputRef}
+                onChange={handleVideoFileChange}
+              />
             </TabPanel>
 
             <TabPanel value={tabValue} index={2}>
