@@ -54,9 +54,9 @@ function normalizeData(data: any[]) {
   });
 }
 
-function generateScormFiles(data: any[]) {
+function generateScormFiles(data: any[], settings?: any) {
   // Use the updated SCORM 2004 package generator
-  return createScormPackage(data);
+  return createScormPackage(data, settings);
 }
 
 function isStorylaneUrl(url: string) {
@@ -438,6 +438,13 @@ export async function POST(request: NextRequest) {
     const videoUrl = formData.get('videoUrl') as string | null;
     const videoFile = formData.get('videoFile') as File | null;
     const htmlFile = formData.get('htmlFile') as File | null;
+    const scormSettingsRaw = formData.get('scormSettings') as string | null;
+    let scormSettings = undefined;
+    if (scormSettingsRaw) {
+      try {
+        scormSettings = JSON.parse(scormSettingsRaw);
+      } catch {}
+    }
 
     // HTML file upload
     if (htmlFile && htmlFile.size > 0) {
@@ -518,7 +525,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid content found to create scenarios' }, { status: 400 });
     }
     data = normalizeData(data);
-    const scormFiles = generateScormFiles(data);
+    const scormFiles = generateScormFiles(data, scormSettings);
     const zip = new JSZip();
     Object.entries(scormFiles).forEach(([path, content]) => {
       zip.file(path, content);

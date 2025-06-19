@@ -6,17 +6,17 @@ interface ScenarioData {
   type?: string;
 }
 
-export async function createScormPackage(data: ScenarioData[]) {
+export async function createScormPackage(data: ScenarioData[], settings?: any) {
   const files: Record<string, string> = {};
   
   // Generate imsmanifest.xml
-  files['imsmanifest.xml'] = generateManifest();
+  files['imsmanifest.xml'] = generateManifest(settings);
   
   // Generate main HTML content
-  files['index.html'] = generateMainHTML(data);
+  files['index.html'] = generateMainHTML(data, settings);
   
   // Generate JavaScript for SCORM communication
-  files['scorm.js'] = generateScormJS();
+  files['scorm.js'] = generateScormJS(settings);
   
   // Generate CSS styles
   files['styles.css'] = generateStyles();
@@ -24,9 +24,11 @@ export async function createScormPackage(data: ScenarioData[]) {
   return files;
 }
 
-function generateManifest() {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<manifest identifier="com.pearson.scenario" version="1.3"
+function generateManifest(settings?: any) {
+  const scormVersion = settings?.scormVersion || '2004';
+  const courseTitle = settings?.courseTitle || 'Customer Service Training Scenario';
+  let schemaVersion = '2004 3rd Edition';
+  let manifestAttrs = `identifier="com.pearson.scenario" version="1.3"
   xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_v1p3"
@@ -37,16 +39,28 @@ function generateManifest() {
                       http://www.adlnet.org/xsd/adlcp_v1p3 adlcp_v1p3.xsd
                       http://www.adlnet.org/xsd/adlseq_v1p3 adlseq_v1p3.xsd
                       http://www.adlnet.org/xsd/adlnav_v1p3 adlnav_v1p3.xsd
-                      http://www.imsglobal.org/xsd/imsss imsss_v1p0.xsd">
+                      http://www.imsglobal.org/xsd/imsss imsss_v1p0.xsd"`;
+  if (scormVersion === '1.2') {
+    schemaVersion = '1.2';
+    manifestAttrs = `identifier="com.pearson.scenario" version="1.0"
+    xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+    xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
+                        http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd
+                        http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd"`;
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<manifest ${manifestAttrs}>
   <metadata>
     <schema>ADL SCORM</schema>
-    <schemaversion>2004 3rd Edition</schemaversion>
+    <schemaversion>${schemaVersion}</schemaversion>
   </metadata>
   <organizations default="default_org">
     <organization identifier="default_org">
-      <title>Customer Service Training Scenario</title>
+      <title>${courseTitle}</title>
       <item identifier="item_1" identifierref="resource_1" isvisible="true">
-        <title>Customer Service Training Scenario</title>
+        <title>${courseTitle}</title>
         <imsss:sequencing>
           <imsss:deliveryControls tracked="true" completionSetByContent="true" objectiveSetByContent="true"/>
         </imsss:sequencing>
@@ -92,7 +106,8 @@ function generateManifest() {
 </manifest>`;
 }
 
-function generateMainHTML(data: ScenarioData[]) {
+function generateMainHTML(data: ScenarioData[], settings?: any) {
+  const courseTitle = settings?.courseTitle || 'Customer Service Training Scenario';
   const scenarios = data.map((item, index) => {
     if (item.question && item.answer) {
       return `
@@ -147,7 +162,7 @@ function generateMainHTML(data: ScenarioData[]) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Service Training Scenario</title>
+  <title>${courseTitle}</title>
   <link rel="stylesheet" href="styles.css">
   <script src="scorm.js"></script>
 </head>
@@ -155,7 +170,7 @@ function generateMainHTML(data: ScenarioData[]) {
   <div class="container">
     <header>
       <img src="https://www.pearson.com/content/dam/one-dot-com/one-dot-com/global/Images/logos/Pearson_Logo_Primary_Blk_RGB.svg" alt="Pearson Logo" class="logo">
-      <h1>Customer Service Training</h1>
+      <h1>${courseTitle}</h1>
     </header>
     
     <main>
@@ -175,7 +190,8 @@ function generateMainHTML(data: ScenarioData[]) {
 </html>`;
 }
 
-function generateScormJS() {
+function generateScormJS(settings?: any) {
+  const completionCriteria = settings?.completionCriteria || 'last';
   return `// Minimal SCORM 2004 API wrapper
 var scormAPI = null;
 var initialized = false;
@@ -303,8 +319,10 @@ function saveProgress() {
     responses: responses
   };
   scormSetBookmark(progress);
-  if (currentScenario === totalScenarios - 1) {
-    scormComplete();
+  if (completionCriteria === 'last') {
+    if (currentScenario === totalScenarios - 1) {
+      scormComplete();
+    }
   }
 }
 

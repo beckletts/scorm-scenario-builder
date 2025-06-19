@@ -14,7 +14,11 @@ import {
   Snackbar,
   Tabs,
   Tab,
-  Divider
+  Divider,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select
 } from '@mui/material';
 import Image from 'next/image';
 import { styled } from '@mui/material/styles';
@@ -77,6 +81,9 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const htmlInputRef = useRef<HTMLInputElement>(null);
+  const [scormVersion, setScormVersion] = useState('2004');
+  const [courseTitle, setCourseTitle] = useState('Customer Service Training Scenario');
+  const [completionCriteria, setCompletionCriteria] = useState('last');
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -151,6 +158,12 @@ export default function Home() {
       if (tabValue === 3 && htmlFile) {
         formData.append('htmlFile', htmlFile);
       }
+      const scormSettings = {
+        scormVersion,
+        courseTitle,
+        completionCriteria
+      };
+      formData.append('scormSettings', JSON.stringify(scormSettings));
       const response = await fetch('/api/generate', {
         method: 'POST',
         body: formData,
@@ -330,6 +343,41 @@ export default function Home() {
                 onChange={handleHtmlFileChange}
               />
             </TabPanel>
+
+            {/* SCORM Settings Section */}
+            <Divider sx={{ my: 4 }}>SCORM Settings</Divider>
+            <Stack spacing={2} sx={{ mb: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel id="scorm-version-label">SCORM Version</InputLabel>
+                <Select
+                  labelId="scorm-version-label"
+                  value={scormVersion}
+                  label="SCORM Version"
+                  onChange={e => setScormVersion(e.target.value)}
+                >
+                  <MenuItem value="2004">SCORM 2004 3rd Edition</MenuItem>
+                  <MenuItem value="1.2">SCORM 1.2</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="Course Title"
+                value={courseTitle}
+                onChange={e => setCourseTitle(e.target.value)}
+              />
+              <FormControl fullWidth>
+                <InputLabel id="completion-criteria-label">Completion Criteria</InputLabel>
+                <Select
+                  labelId="completion-criteria-label"
+                  value={completionCriteria}
+                  label="Completion Criteria"
+                  onChange={e => setCompletionCriteria(e.target.value)}
+                >
+                  <MenuItem value="last">On last scenario</MenuItem>
+                  <MenuItem value="button">On button click</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
 
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
               <Button
