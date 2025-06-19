@@ -26,27 +26,64 @@ export async function createScormPackage(data: ScenarioData[]) {
 
 function generateManifest() {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<manifest identifier="com.pearson.scenario" version="1.0"
-  xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
-  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+<manifest identifier="com.pearson.scenario" version="1.3"
+  xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
-                      http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd
-                      http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_v1p3"
+  xmlns:adlseq="http://www.adlnet.org/xsd/adlseq_v1p3"
+  xmlns:adlnav="http://www.adlnet.org/xsd/adlnav_v1p3"
+  xmlns:imsss="http://www.imsglobal.org/xsd/imsss"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imscp_v1p1 imscp_v1p1.xsd
+                      http://www.adlnet.org/xsd/adlcp_v1p3 adlcp_v1p3.xsd
+                      http://www.adlnet.org/xsd/adlseq_v1p3 adlseq_v1p3.xsd
+                      http://www.adlnet.org/xsd/adlnav_v1p3 adlnav_v1p3.xsd
+                      http://www.imsglobal.org/xsd/imsss imsss_v1p0.xsd">
   <metadata>
     <schema>ADL SCORM</schema>
-    <schemaversion>1.2</schemaversion>
+    <schemaversion>2004 3rd Edition</schemaversion>
   </metadata>
   <organizations default="default_org">
     <organization identifier="default_org">
       <title>Customer Service Training Scenario</title>
-      <item identifier="item_1" identifierref="resource_1">
+      <item identifier="item_1" identifierref="resource_1" isvisible="true">
         <title>Customer Service Training Scenario</title>
+        <imsss:sequencing>
+          <imsss:deliveryControls tracked="true" completionSetByContent="true" objectiveSetByContent="true"/>
+        </imsss:sequencing>
       </item>
+      <imsss:sequencing>
+        <imsss:controlMode choice="true" flow="true"/>
+        <imsss:rollupRules>
+          <imsss:rollupRule childActivitySet="all">
+            <imsss:rollupConditions>
+              <imsss:rollupCondition condition="satisfied"/>
+            </imsss:rollupConditions>
+            <imsss:rollupAction action="satisfied"/>
+          </imsss:rollupRule>
+          <imsss:rollupRule childActivitySet="all">
+            <imsss:rollupConditions>
+              <imsss:rollupCondition operator="not" condition="satisfied"/>
+            </imsss:rollupConditions>
+            <imsss:rollupAction action="notSatisfied"/>
+          </imsss:rollupRule>
+          <imsss:rollupRule childActivitySet="all">
+            <imsss:rollupConditions>
+              <imsss:rollupCondition condition="completed"/>
+            </imsss:rollupConditions>
+            <imsss:rollupAction action="completed"/>
+          </imsss:rollupRule>
+          <imsss:rollupRule childActivitySet="all">
+            <imsss:rollupConditions>
+              <imsss:rollupCondition operator="not" condition="completed"/>
+            </imsss:rollupConditions>
+            <imsss:rollupAction action="incomplete"/>
+          </imsss:rollupRule>
+        </imsss:rollupRules>
+      </imsss:sequencing>
     </organization>
   </organizations>
   <resources>
-    <resource identifier="resource_1" type="webcontent" adlcp:scormtype="sco" href="index.html">
+    <resource identifier="resource_1" type="webcontent" adlcp:scormType="sco" href="index.html">
       <file href="index.html"/>
       <file href="scorm.js"/>
       <file href="styles.css"/>
@@ -139,41 +176,86 @@ function generateMainHTML(data: ScenarioData[]) {
 }
 
 function generateScormJS() {
-  return `let currentScenario = 0;
-let totalScenarios = 0;
-let responses = [];
-let scorm = pipwerks.SCORM;
+  return `// Minimal SCORM 2004 API wrapper
+var scormAPI = null;
+var initialized = false;
+var terminated = false;
+var currentScenario = 0;
+var totalScenarios = 0;
+var responses = [];
 
-// Initialize SCORM
-function initializeScorm() {
-  scorm.init();
-  totalScenarios = document.querySelectorAll('.scenario').length;
-  showScenario(0);
-  updateProgress();
+function findAPI(win) {
+  var tries = 0;
+  while (win && tries < 10) {
+    if (win.API_1484_11) return win.API_1484_11;
+    win = win.parent;
+    tries++;
+  }
+  return null;
 }
 
-// Show specific scenario
+function scormInit() {
+  scormAPI = findAPI(window) || findAPI(window.top);
+  if (scormAPI && scormAPI.Initialize("") === "true") {
+    initialized = true;
+    // Set to incomplete at start
+    scormAPI.SetValue("cmi.completion_status", "incomplete");
+    scormAPI.Commit("");
+  }
+}
+
+function scormSetBookmark(data) {
+  if (initialized && scormAPI) {
+    scormAPI.SetValue("cmi.location", JSON.stringify(data));
+    scormAPI.Commit("");
+  }
+}
+
+function scormGetBookmark() {
+  if (initialized && scormAPI) {
+    var loc = scormAPI.GetValue("cmi.location");
+    try {
+      return loc ? JSON.parse(loc) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function scormComplete() {
+  if (initialized && scormAPI) {
+    scormAPI.SetValue("cmi.completion_status", "completed");
+    scormAPI.Commit("");
+  }
+}
+
+function scormTerminate() {
+  if (initialized && scormAPI && !terminated) {
+    scormAPI.Terminate("");
+    terminated = true;
+  }
+}
+
+// UI logic
 function showScenario(index) {
   document.querySelectorAll('.scenario').forEach(scenario => {
     scenario.style.display = 'none';
   });
-  
-  const scenario = document.querySelector(\`.scenario[data-index="\${index}"]\`);
+  const scenario = document.querySelector(`.scenario[data-index="${index}"]`);
   if (scenario) {
     scenario.style.display = 'block';
   }
-  
   document.getElementById('prev-btn').disabled = index === 0;
   document.getElementById('next-btn').disabled = index === totalScenarios - 1;
-  
   updateProgress();
 }
 
-// Navigation functions
 function previousScenario() {
   if (currentScenario > 0) {
     currentScenario--;
     showScenario(currentScenario);
+    saveProgress();
   }
 }
 
@@ -181,91 +263,72 @@ function nextScenario() {
   if (currentScenario < totalScenarios - 1) {
     currentScenario++;
     showScenario(currentScenario);
+    saveProgress();
   }
 }
 
-// Submit response
 function submitResponse(index) {
-  const scenario = document.querySelector(\`.scenario[data-index="\${index}"]\`);
+  const scenario = document.querySelector(`.scenario[data-index="${index}"]`);
   const response = scenario.querySelector('.response-input').value;
-  
   responses[index] = response;
-  
-  // Show feedback section
   scenario.querySelector('.feedback-section').style.display = 'block';
-  
-  // Save progress to SCORM
   saveProgress();
 }
 
-// Rate response
 function rateResponse(index, rating) {
   responses[index] = {
     ...responses[index],
     rating: rating
   };
-  
-  // Save progress to SCORM
   saveProgress();
-  
-  // Enable next button
   document.getElementById('next-btn').disabled = false;
 }
 
-// Submit comprehension
 function submitComprehension(index) {
-  const scenario = document.querySelector(\`.scenario[data-index="\${index}"]\`);
+  const scenario = document.querySelector(`.scenario[data-index="${index}"]`);
   const comprehension = scenario.querySelector('.comprehension-input').value;
-  
   responses[index] = comprehension;
-  
-  // Save progress to SCORM
   saveProgress();
-  
-  // Enable next button
   document.getElementById('next-btn').disabled = false;
 }
 
-// Update progress bar
 function updateProgress() {
   const progress = ((currentScenario + 1) / totalScenarios) * 100;
-  document.querySelector('.progress-fill').style.width = \`\${progress}%\`;
+  document.querySelector('.progress-fill').style.width = `${progress}%`;
 }
 
-// Save progress to SCORM
 function saveProgress() {
   const progress = {
     currentScenario,
     responses
   };
-  
-  scorm.set('cmi.core.lesson_location', JSON.stringify(progress));
-  scorm.set('cmi.core.lesson_status', 'incomplete');
-  scorm.save();
+  scormSetBookmark(progress);
+  if (currentScenario === totalScenarios - 1) {
+    scormComplete();
+  }
 }
 
-// Load progress from SCORM
 function loadProgress() {
-  const savedProgress = scorm.get('cmi.core.lesson_location');
-  if (savedProgress) {
-    const progress = JSON.parse(savedProgress);
+  const progress = scormGetBookmark();
+  if (progress) {
     currentScenario = progress.currentScenario;
     responses = progress.responses;
     showScenario(currentScenario);
   }
 }
 
-// Initialize when page loads
 window.onload = function() {
-  initializeScorm();
+  scormInit();
+  totalScenarios = document.querySelectorAll('.scenario').length;
+  showScenario(0);
+  updateProgress();
   loadProgress();
 };
 
-// Save progress when page unloads
 window.onunload = function() {
-  scorm.set('cmi.core.exit', '');
-  scorm.quit();
-};`;
+  scormTerminate();
+};
+`;
 }
 
 function generateStyles() {
