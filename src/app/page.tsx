@@ -142,8 +142,8 @@ export default function Home() {
         } catch (e) {
           throw new Error('Invalid JSON. Please check your input.');
         }
-        if (!parsed || !Array.isArray(parsed.scenarios)) {
-          throw new Error('JSON must have a "scenarios" array.');
+        if (!parsed || !Array.isArray(parsed.scenarios) || parsed.scenarios.length === 0) {
+          throw new Error('JSON must have a non-empty "scenarios" array.');
         }
         formData.append('scenarios', JSON.stringify(parsed.scenarios));
       }
@@ -169,11 +169,19 @@ export default function Home() {
         body: formData,
       });
 
+      const contentType = response.headers.get('content-type');
       if (!response.ok) {
+        let errorMsg = 'Failed to generate SCORM package';
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          errorMsg = data.error || errorMsg;
+        }
+        throw new Error(errorMsg);
+      }
+      if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         throw new Error(data.error || 'Failed to generate SCORM package');
       }
-
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
