@@ -242,7 +242,7 @@ function showScenario(index) {
   document.querySelectorAll('.scenario').forEach(scenario => {
     scenario.style.display = 'none';
   });
-  const scenario = document.querySelector(`.scenario[data-index="${index}"]`);
+  var scenario = document.querySelector('.scenario[data-index="' + index + '"]');
   if (scenario) {
     scenario.style.display = 'block';
   }
@@ -268,8 +268,8 @@ function nextScenario() {
 }
 
 function submitResponse(index) {
-  const scenario = document.querySelector(`.scenario[data-index="${index}"]`);
-  const response = scenario.querySelector('.response-input').value;
+  var scenario = document.querySelector('.scenario[data-index="' + index + '"]');
+  var response = scenario.querySelector('.response-input').value;
   responses[index] = response;
   scenario.querySelector('.feedback-section').style.display = 'block';
   saveProgress();
@@ -285,22 +285,22 @@ function rateResponse(index, rating) {
 }
 
 function submitComprehension(index) {
-  const scenario = document.querySelector(`.scenario[data-index="${index}"]`);
-  const comprehension = scenario.querySelector('.comprehension-input').value;
+  var scenario = document.querySelector('.scenario[data-index="' + index + '"]');
+  var comprehension = scenario.querySelector('.comprehension-input').value;
   responses[index] = comprehension;
   saveProgress();
   document.getElementById('next-btn').disabled = false;
 }
 
 function updateProgress() {
-  const progress = ((currentScenario + 1) / totalScenarios) * 100;
-  document.querySelector('.progress-fill').style.width = `${progress}%`;
+  var progress = ((currentScenario + 1) / totalScenarios) * 100;
+  document.querySelector('.progress-fill').style.width = progress + '%';
 }
 
 function saveProgress() {
-  const progress = {
-    currentScenario,
-    responses
+  var progress = {
+    currentScenario: currentScenario,
+    responses: responses
   };
   scormSetBookmark(progress);
   if (currentScenario === totalScenarios - 1) {
@@ -309,7 +309,7 @@ function saveProgress() {
 }
 
 function loadProgress() {
-  const progress = scormGetBookmark();
+  var progress = scormGetBookmark();
   if (progress) {
     currentScenario = progress.currentScenario;
     responses = progress.responses;
