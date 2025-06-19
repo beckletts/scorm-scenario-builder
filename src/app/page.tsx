@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import Image from 'next/image';
 import { styled } from '@mui/material/styles';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 const Input = styled('input')({
   display: 'none',
@@ -49,16 +50,32 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+const exampleSchema = `{
+  "scenarios": [
+    {
+      "question": "How do I reset my password?",
+      "answer": "Click 'Forgot password' on the login page and follow the instructions."
+    },
+    {
+      "question": "How do I contact support?",
+      "answer": "Email support@example.com or call 0800-123-456."
+    }
+  ]
+}`;
+
 export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [tabValue, setTabValue] = useState(0);
-  const [scenarios, setScenarios] = useState('');
+  const [jsonText, setJsonText] = useState('');
+  const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [htmlFile, setHtmlFile] = useState<File | null>(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
   const htmlInputRef = useRef<HTMLInputElement>(null);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -68,6 +85,8 @@ export default function Home() {
     setVideoUrl('');
     setVideoFile(null);
     setHtmlFile(null);
+    setJsonText('');
+    setJsonFile(null);
   };
 
   const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +101,25 @@ export default function Home() {
     }
   };
 
+  const handleJsonFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      setJsonFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setJsonText(e.target?.result as string);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleCopySchema = () => {
+    navigator.clipboard.writeText(exampleSchema);
+    setSnackbarOpen(true);
+  };
+
+  const handleSnackbarClose = () => setSnackbarOpen(false);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
@@ -90,12 +128,17 @@ export default function Home() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      if (tabValue === 0 && scenarios) {
-        const scenariosData = scenarios.split('---').map(scenario => {
-          const [question, answer] = scenario.trim().split('\n\n');
-          return { question, answer, type: 'customer_service' };
-        });
-        formData.append('scenarios', JSON.stringify(scenariosData));
+      if (tabValue === 0) {
+        let parsed;
+        try {
+          parsed = JSON.parse(jsonText);
+        } catch (e) {
+          throw new Error('Invalid JSON. Please check your input.');
+        }
+        if (!parsed || !Array.isArray(parsed.scenarios)) {
+          throw new Error('JSON must have a "scenarios" array.');
+        }
+        formData.append('scenarios', JSON.stringify(parsed.scenarios));
       }
       if (tabValue === 1) {
         if (videoUrl) {
@@ -156,7 +199,7 @@ export default function Home() {
 
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="input method tabs">
-              <Tab label="Paste Scenarios" />
+              <Tab label="Paste or Upload JSON" />
               <Tab label="Video" />
               <Tab label="URL" />
               <Tab label="Upload HTML" />
@@ -165,25 +208,46 @@ export default function Home() {
 
           <form onSubmit={handleSubmit}>
             <TabPanel value={tabValue} index={0}>
-              <Typography variant="body1" gutterBottom>
-                Paste your scenarios using the following format:
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Question or Scenario Description<br/>
-                <br/>
-                Answer or Expected Response<br/>
-                <br/>
-                --- (three dashes to separate scenarios)
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Typography variant="body1" sx={{ flexGrow: 1 }}>
+                  Paste your JSON below or upload a .json file. You can use the example schema for AI prompts.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={handleCopySchema}
+                  sx={{ ml: 2 }}
+                >
+                  Copy Example Schema
+                </Button>
+              </Box>
               <TextField
                 fullWidth
                 multiline
                 rows={10}
-                value={scenarios}
-                onChange={(e) => setScenarios(e.target.value)}
-                placeholder={`Customer asks about refund policy\n\nExplain that refunds can be processed within 30 days of purchase with a valid receipt\n\n---\n\nCustomer complains about late delivery\n\nApologize for the delay, verify tracking information, and offer compensation if applicable`}
+                value={jsonText}
+                onChange={e => setJsonText(e.target.value)}
+                placeholder={exampleSchema}
                 variant="outlined"
                 sx={{ mb: 2 }}
+              />
+              <Button
+                variant="outlined"
+                component="span"
+                fullWidth
+                sx={{ height: '60px', mb: 2 }}
+                onClick={() => jsonInputRef.current?.click()}
+              >
+                {jsonFile ? jsonFile.name : 'Click to Upload JSON File'}
+              </Button>
+              <Input
+                id="json-file-input"
+                name="jsonFile"
+                type="file"
+                accept="application/json,.json"
+                ref={jsonInputRef}
+                onChange={handleJsonFileChange}
               />
             </TabPanel>
 
@@ -273,6 +337,16 @@ export default function Home() {
             </Box>
           </form>
         </Paper>
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={3000}
+          onClose={handleSnackbarClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={handleSnackbarClose} severity="success" variant="filled">
+            Example schema copied to clipboard!
+          </Alert>
+        </Snackbar>
       </Box>
     </Container>
   );
