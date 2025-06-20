@@ -108,55 +108,6 @@ function generateManifest(settings?: any) {
 
 function generateMainHTML(data: ScenarioData[], settings?: any) {
   const courseTitle = settings?.courseTitle || 'Customer Service Training Scenario';
-  const scenarios = data.map((item, index) => {
-    if (item.question && item.answer) {
-      return `
-        <div class="scenario" data-index="${index}" style="display: none;">
-          <div class="scenario-content">
-            <h2>Scenario ${index + 1}</h2>
-            <div class="question-section">
-              <h3>Customer Query:</h3>
-              <p>${item.question}</p>
-            </div>
-            <div class="response-section" style="display: none;">
-              <textarea class="response-input" placeholder="Enter your response..."></textarea>
-              <button class="submit-btn" onclick="submitResponse(${index})">Submit Response</button>
-            </div>
-            <div class="feedback-section" style="display: none;">
-              <h3>Model Response:</h3>
-              <p>${item.answer}</p>
-              <div class="self-assessment">
-                <h4>Self-Assessment:</h4>
-                <div class="rating-buttons">
-                  <button onclick="rateResponse(${index}, 1)">Needs Improvement</button>
-                  <button onclick="rateResponse(${index}, 2)">Good</button>
-                  <button onclick="rateResponse(${index}, 3)">Excellent</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (item.content) {
-      return `
-        <div class="scenario" data-index="${index}" style="display: none;">
-          <div class="scenario-content">
-            <h2>Knowledge Base Content</h2>
-            <div class="content-section">
-              <p>${item.content}</p>
-            </div>
-            <div class="comprehension-check">
-              <h3>Comprehension Check:</h3>
-              <textarea class="comprehension-input" placeholder="Summarize the key points..."></textarea>
-              <button class="submit-btn" onclick="submitComprehension(${index})">Submit</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    return '';
-  }).join('');
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -169,7 +120,6 @@ function generateMainHTML(data: ScenarioData[], settings?: any) {
 <body>
   <div class="container">
     <header>
-      <img src="https://www.pearson.com/content/dam/one-dot-com/one-dot-com/global/Images/logos/Pearson_Logo_Primary_Blk_RGB.svg" alt="Pearson Logo" class="logo">
       <h1>${courseTitle}</h1>
     </header>
     
@@ -178,7 +128,54 @@ function generateMainHTML(data: ScenarioData[], settings?: any) {
         <div class="progress-fill"></div>
       </div>
       
-      ${scenarios}
+      ${data.map((item, index) => {
+        if (item.question && item.answer) {
+          return `
+            <div class="scenario" data-index="${index}" style="display: none;">
+              <div class="scenario-content">
+                <h2>Scenario ${index + 1}</h2>
+                <div class="question-section">
+                  <h3>Customer Query:</h3>
+                  <p>${item.question}</p>
+                </div>
+                <div class="response-section" style="display: block;">
+                  <textarea class="response-input" placeholder="Enter your response..."></textarea>
+                  <button class="submit-btn" onclick="submitResponse(${index})">Submit Response</button>
+                </div>
+                <div class="feedback-section" style="display: none;">
+                  <h3>Model Response:</h3>
+                  <p>${item.answer}</p>
+                  <div class="self-assessment">
+                    <h4>Self-Assessment:</h4>
+                    <div class="rating-buttons">
+                      <button onclick="rateResponse(${index}, 1)">Needs Improvement</button>
+                      <button onclick="rateResponse(${index}, 2)">Good</button>
+                      <button onclick="rateResponse(${index}, 3)">Excellent</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (item.content) {
+          return `
+            <div class="scenario" data-index="${index}" style="display: none;">
+              <div class="scenario-content">
+                <h2>Knowledge Base Content</h2>
+                <div class="content-section">
+                  <p>${item.content}</p>
+                </div>
+                <div class="comprehension-check">
+                  <h3>Comprehension Check:</h3>
+                  <textarea class="comprehension-input" placeholder="Summarize the key points..."></textarea>
+                  <button class="submit-btn" onclick="submitComprehension(${index})">Submit</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        return '';
+      }).join('')}
       
       <div class="navigation-buttons">
         <button id="prev-btn" onclick="previousScenario()" disabled>Previous</button>
@@ -382,11 +379,6 @@ body {
 header {
   text-align: center;
   margin-bottom: 2rem;
-}
-
-.logo {
-  max-width: 200px;
-  margin-bottom: 1rem;
 }
 
 h1 {
