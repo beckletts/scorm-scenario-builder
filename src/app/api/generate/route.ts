@@ -54,9 +54,8 @@ function normalizeData(data: any[]) {
   });
 }
 
-function generateScormFiles(data: any[], settings?: any) {
-  // Use the updated SCORM 2004 package generator
-  return createScormPackage(data, settings);
+async function generateScormFiles(data: any[], settings?: any) {
+  return await createScormPackage(data, settings);
 }
 
 function isStorylaneUrl(url: string) {
@@ -534,7 +533,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid content found to create scenarios' }, { status: 400 });
     }
     data = normalizeData(data);
-    const scormFiles = generateScormFiles(data, scormSettings);
+    const scormFiles = await generateScormFiles(data, scormSettings);
     // Log the generated files and a sample of their contents
     console.log('Generated SCORM files:', Object.keys(scormFiles));
     Object.entries(scormFiles).forEach(([path, content]) => {
