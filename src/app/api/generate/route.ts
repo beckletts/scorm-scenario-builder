@@ -535,6 +535,11 @@ export async function POST(request: NextRequest) {
     }
     data = normalizeData(data);
     const scormFiles = generateScormFiles(data, scormSettings);
+    // Log the generated files and a sample of their contents
+    console.log('Generated SCORM files:', Object.keys(scormFiles));
+    Object.entries(scormFiles).forEach(([path, content]) => {
+      console.log(`File: ${path}, Content sample:`, typeof content === 'string' ? content.slice(0, 200) : '[binary]');
+    });
     const zip = new JSZip();
     Object.entries(scormFiles).forEach(([path, content]) => {
       zip.file(path, content);
