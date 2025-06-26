@@ -508,29 +508,47 @@ function PowerPointTab() {
         throw new Error('No slides found in PowerPoint file. The file may be empty or corrupted.');
       }
       
+      // Extract relationship mappings for images
+      const slideRelationships = {};
       for (let i = 0; i < slideFiles.length; i++) {
-        try {
-          const slideXml = zip.file(slideFiles[i]).asText();
-          const slideContent = parseSlideXML(slideXml, i + 1);
-          extractedSlides.push(slideContent);
-        } catch (slideError) {
-          console.warn(`Error processing slide ${i + 1}:`, slideError);
-          // Continue with other slides but add a placeholder
-          extractedSlides.push({
-            slideNumber: i + 1,
-            title: `Slide ${i + 1} (Content Error)`,
-            content: ['Content could not be extracted from this slide.'],
-            xmlContent: ''
-          });
+        const slideNum = i + 1;
+        const relPath = `ppt/slides/_rels/slide${slideNum}.xml.rels`;
+        if (zip.files[relPath]) {
+          try {
+            const relXml = zip.file(relPath).asText();
+            const relationships = {};
+            const relMatches = relXml.match(/<Relationship[^>]*>/g) || [];
+            relMatches.forEach(rel => {
+              const idMatch = rel.match(/Id="([^"]*)"/);
+              const targetMatch = rel.match(/Target="([^"]*)"/) || rel.match(/Target='([^']*)'/);
+              if (idMatch && targetMatch) {
+                let target = targetMatch[1];
+                // Convert relative path to absolute path within the zip
+                if (target.startsWith('../media/')) {
+                  target = 'ppt/' + target.substring(3);
+                } else if (!target.startsWith('ppt/')) {
+                  target = 'ppt/slides/' + target;
+                }
+                relationships[idMatch[1]] = target;
+              }
+            });
+            slideRelationships[slideNum] = relationships;
+          } catch (relError) {
+            console.warn(`Error processing relationships for slide ${slideNum}:`, relError);
+            slideRelationships[slideNum] = {};
+          }
+        } else {
+          slideRelationships[slideNum] = {};
         }
       }
-      
-      // Extract images
+
+      // Extract images with better mapping
       const imageFiles = Object.keys(zip.files).filter(name => 
         name.startsWith('ppt/media/') && /\.(png|jpg|jpeg|gif|svg|bmp|wmf|emf)$/i.test(name)
       );
       
       const images = {};
+      const imagesByPath = {};
       for (const imagePath of imageFiles) {
         try {
           const imageData = zip.file(imagePath).asUint8Array();
@@ -547,17 +565,53 @@ function PowerPointTab() {
           }[extension] || 'image/png';
           
           const blob = new Blob([imageData], { type: mimeType });
+          const imageUrl = URL.createObjectURL(blob);
           const imageName = imagePath.split('/').pop();
-          images[imageName] = URL.createObjectURL(blob);
+          
+          images[imageName] = imageUrl;
+          imagesByPath[imagePath] = imageUrl;
         } catch (imageError) {
           console.warn(`Error processing image ${imagePath}:`, imageError);
         }
       }
-      
-      // Add image references to slides
-      extractedSlides.forEach(slide => {
-        slide.images = images;
-      });
+
+      for (let i = 0; i < slideFiles.length; i++) {
+        try {
+          const slideXml = zip.file(slideFiles[i]).asText();
+          const slideContent = parseSlideXML(slideXml, i + 1);
+          
+          // Map image IDs to actual image URLs for this slide
+          const slideImages = [];
+          const slideRels = slideRelationships[i + 1] || {};
+          
+          slideContent.imageIds.forEach(imageId => {
+            const imagePath = slideRels[imageId];
+            if (imagePath && imagesByPath[imagePath]) {
+              slideImages.push({
+                id: imageId,
+                url: imagesByPath[imagePath],
+                path: imagePath,
+                name: imagePath.split('/').pop()
+              });
+            }
+          });
+          
+          slideContent.slideImages = slideImages;
+          slideContent.allImages = images;
+          extractedSlides.push(slideContent);
+        } catch (slideError) {
+          console.warn(`Error processing slide ${i + 1}:`, slideError);
+          // Continue with other slides but add a placeholder
+          extractedSlides.push({
+            slideNumber: i + 1,
+            title: `Slide ${i + 1} (Content Error)`,
+            content: ['Content could not be extracted from this slide.'],
+            slideImages: [],
+            allImages: images,
+            xmlContent: ''
+          });
+        }
+      }
       
       setSlides(extractedSlides);
       
@@ -591,6 +645,45 @@ function PowerPointTab() {
       return text.trim();
     }).filter(text => text.length > 0);
     
+    // Extract image references from the slide
+    const imageRefs = [];
+    
+    // Look for image relationships in the XML
+    const imageMatches = xmlContent.match(/<a:blip[^>]*r:embed="([^"]*)"[^>]*>/g) || [];
+    const imageIds = imageMatches.map(match => {
+      const embedMatch = match.match(/r:embed="([^"]*)"/);
+      return embedMatch ? embedMatch[1] : null;
+    }).filter(id => id);
+    
+    // Also look for direct image references
+    const directImageMatches = xmlContent.match(/<pic:pic[^>]*>.*?<\/pic:pic>/gs) || [];
+    directImageMatches.forEach(picMatch => {
+      const blipMatch = picMatch.match(/<a:blip[^>]*r:embed="([^"]*)"[^>]*>/);
+      if (blipMatch && blipMatch[1] && !imageIds.includes(blipMatch[1])) {
+        imageIds.push(blipMatch[1]);
+      }
+    });
+    
+    // Look for shapes and other visual elements
+    const shapeMatches = xmlContent.match(/<p:sp[^>]*>.*?<\/p:sp>/gs) || [];
+    const visualElements = [];
+    
+    shapeMatches.forEach(shape => {
+      // Check if shape contains images
+      const hasImage = shape.includes('<a:blip') || shape.includes('<pic:pic');
+      if (hasImage) {
+        visualElements.push('image');
+      }
+      
+      // Check for other visual elements like charts, tables, etc.
+      if (shape.includes('<c:chart')) {
+        visualElements.push('chart');
+      }
+      if (shape.includes('<a:tbl')) {
+        visualElements.push('table');
+      }
+    });
+    
     // Extract title (usually the first large text block)
     const title = textContent[0] || `Slide ${slideNumber}`;
     const content = textContent.slice(1);
@@ -599,6 +692,8 @@ function PowerPointTab() {
       slideNumber,
       title,
       content,
+      imageIds,
+      visualElements,
       xmlContent // Keep original for advanced processing
     };
   }
@@ -614,6 +709,20 @@ function PowerPointTab() {
         </div>
         <div class="slide-content">
           ${slide.content.map(text => `<p>${text}</p>`).join('')}
+          ${slide.slideImages && slide.slideImages.length > 0 ? `
+            <div class="slide-images">
+              ${slide.slideImages.map(img => `
+                <div class="image-container">
+                  <img src="${img.url}" alt="Slide image" class="slide-image" />
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+          ${slide.visualElements && slide.visualElements.length > 0 ? `
+            <div class="visual-indicators">
+              <p><em>This slide contains: ${slide.visualElements.join(', ')}</em></p>
+            </div>
+          ` : ''}
         </div>
         <div class="slide-navigation">
           ${index > 0 ? `<button onclick="showSlide(${index - 1})" class="nav-btn prev-btn">← Previous</button>` : ''}
@@ -741,6 +850,42 @@ function PowerPointTab() {
         .slide-content p {
             margin-bottom: 1rem;
             font-size: 1.1rem;
+        }
+        
+        .slide-images {
+            margin: 2rem 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .image-container {
+            text-align: center;
+            margin: 1rem 0;
+        }
+        
+        .slide-image {
+            max-width: 100%;
+            max-height: 400px;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(11,0,74,0.1);
+            object-fit: contain;
+        }
+        
+        .visual-indicators {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: #E6E6F2;
+            border-radius: 8px;
+            font-style: italic;
+            color: #6C2EB7;
+        }
+        
+        @media (max-width: 768px) {
+            .slide-image {
+                max-height: 250px;
+            }
         }
         
         .slide-navigation {
@@ -940,6 +1085,32 @@ Created with HTMLwiz - Pearson Education`);
                     <p key={i} style={{ margin: '4px 0' }}>{text}</p>
                   ))}
                   {slide.content.length > 3 && <p style={{ fontStyle: 'italic' }}>...and {slide.content.length - 3} more items</p>}
+                  {slide.slideImages && slide.slideImages.length > 0 && (
+                    <div style={{ marginTop: 8, padding: 8, background: pearsonColors.lightPurple, borderRadius: 4 }}>
+                      <strong style={{ color: pearsonColors.purple }}>📷 Images found: {slide.slideImages.length}</strong>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        {slide.slideImages.map((img, imgIndex) => (
+                          <img 
+                            key={imgIndex} 
+                            src={img.url} 
+                            alt={`Slide ${slide.slideNumber} image ${imgIndex + 1}`}
+                            style={{ 
+                              width: 60, 
+                              height: 40, 
+                              objectFit: 'cover', 
+                              borderRadius: 4,
+                              border: `1px solid ${pearsonColors.amethyst}`
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {slide.visualElements && slide.visualElements.length > 0 && (
+                    <div style={{ marginTop: 4, fontSize: '0.8rem', color: pearsonColors.amethyst, fontStyle: 'italic' }}>
+                      Visual elements: {slide.visualElements.join(', ')}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
