@@ -1611,12 +1611,84 @@ Created with HTMLwiz - Pearson Education`);
 
   const currentSlideData = slides[currentSlide] || {};
 
+  function handleBulkImageUpload(e) {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    
+    setIsBuilding(true);
+    
+    const imagePromises = files.map((file, index) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          resolve({
+            file,
+            url: event.target.result,
+            name: file.name,
+            index
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(imagePromises).then(images => {
+      // Create slides based on uploaded images
+      const newSlides = images.map((img, index) => ({
+        id: index + 1,
+        title: img.name.replace(/\.[^/.]+$/, ""), // Remove file extension
+        content: `Image: ${img.name}`,
+        images: [img],
+        audioFile: null,
+        audioUrl: '',
+        hyperlinks: []
+      }));
+      
+      setSlides(newSlides);
+      setSlideCount(newSlides.length);
+      setCurrentSlide(0);
+      setIsBuilding(false);
+      
+      // Clear the file input
+      e.target.value = '';
+    });
+  }
+
   return (
     <div aria-label="Custom Slide Builder">
       <h3 style={{ fontWeight: 600, marginBottom: '1rem' }}>Build Custom Interactive Presentation:</h3>
       
-      {/* Number of slides selector */}
+      {/* Bulk image upload feature */}
+      <div style={{ marginBottom: '2rem', padding: '1rem', background: pearsonColors.amethyst, borderRadius: 8, color: 'white' }}>
+        <h4 style={{ marginBottom: '1rem', color: 'white' }}>🚀 Quick Start: Create Slides from Images</h4>
+        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', opacity: 0.9 }}>
+          Upload multiple images to automatically create a slide for each image. You can then add text, audio, and hyperlinks to each slide.
+        </p>
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={handleBulkImageUpload}
+          disabled={isBuilding}
+          style={{
+            padding: '0.75rem',
+            borderRadius: 8,
+            border: 'none',
+            background: 'white',
+            width: '100%',
+            fontSize: '1rem'
+          }}
+        />
+        {isBuilding && (
+          <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+            ⏳ Processing images and creating slides...
+          </div>
+        )}
+      </div>
+      
+      {/* Manual slide creation */}
       <div style={{ marginBottom: '2rem', padding: '1rem', background: pearsonColors.lightPurple, borderRadius: 8 }}>
+        <h4 style={{ marginBottom: '1rem', color: pearsonColors.purple }}>📝 Manual Slide Creation</h4>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
           Number of Slides:
         </label>
@@ -1633,6 +1705,9 @@ Created with HTMLwiz - Pearson Education`);
             width: 100
           }}
         />
+        <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: pearsonColors.amethyst }}>
+          💡 Tip: You can also use the bulk image upload above to create slides automatically
+        </div>
       </div>
 
       {/* Slide navigation */}
@@ -1705,62 +1780,96 @@ Created with HTMLwiz - Pearson Education`);
           />
         </div>
 
-        {/* Image upload */}
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-            Add Images:
-          </label>
-          <input
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={handleImageUpload}
-            style={{
-              padding: '0.5rem',
-              borderRadius: 4,
-              border: `1px solid ${pearsonColors.amethyst}`,
-              width: '100%'
-            }}
-          />
-          
-          {currentSlideData.images && currentSlideData.images.length > 0 && (
-            <div style={{ marginTop: '1rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {currentSlideData.images.map((img, index) => (
-                <div key={index} style={{ position: 'relative' }}>
-                  <img
-                    src={img.url}
-                    alt={img.name}
-                    style={{ 
-                      width: 100, 
-                      height: 80, 
-                      objectFit: 'cover', 
-                      borderRadius: 4,
-                      border: `2px solid ${pearsonColors.amethyst}`
-                    }}
-                  />
-                  <button
-                    onClick={() => removeImage(index)}
-                    style={{
-                      position: 'absolute',
-                      top: -8,
-                      right: -8,
-                      background: 'red',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: 20,
-                      height: 20,
-                      fontSize: '0.7rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                 {/* Image upload */}
+         <div style={{ marginBottom: '1rem' }}>
+           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
+             Add More Images:
+           </label>
+           <div style={{ fontSize: '0.8rem', color: pearsonColors.amethyst, marginBottom: '0.5rem' }}>
+             {currentSlideData.images && currentSlideData.images.length > 0 
+               ? `Current slide has ${currentSlideData.images.length} image(s). Add more below.`
+               : 'No images on this slide yet. Upload some below.'
+             }
+           </div>
+           <input
+             type="file"
+             multiple
+             accept="image/*"
+             onChange={handleImageUpload}
+             style={{
+               padding: '0.5rem',
+               borderRadius: 4,
+               border: `1px solid ${pearsonColors.amethyst}`,
+               width: '100%'
+             }}
+           />
+           
+           {currentSlideData.images && currentSlideData.images.length > 0 && (
+             <div style={{ marginTop: '1rem' }}>
+               <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', color: pearsonColors.purple }}>
+                 Current Images:
+               </div>
+               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                 {currentSlideData.images.map((img, index) => (
+                   <div key={index} style={{ position: 'relative' }}>
+                     <img
+                       src={img.url}
+                       alt={img.name}
+                       title={img.name}
+                       style={{ 
+                         width: 100, 
+                         height: 80, 
+                         objectFit: 'cover', 
+                         borderRadius: 4,
+                         border: `2px solid ${pearsonColors.amethyst}`,
+                         cursor: 'pointer'
+                       }}
+                       onClick={() => {
+                         // Create a larger preview
+                         const preview = window.open('', '_blank');
+                         preview.document.write(`
+                           <html>
+                             <head><title>${img.name}</title></head>
+                             <body style="margin:0;padding:20px;background:#f0f0f0;display:flex;justify-content:center;align-items:center;min-height:100vh;">
+                               <img src="${img.url}" alt="${img.name}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+                             </body>
+                           </html>
+                         `);
+                       }}
+                     />
+                     <button
+                       onClick={() => removeImage(index)}
+                       title="Remove image"
+                       style={{
+                         position: 'absolute',
+                         top: -8,
+                         right: -8,
+                         background: '#ff4757',
+                         color: 'white',
+                         border: 'none',
+                         borderRadius: '50%',
+                         width: 24,
+                         height: 24,
+                         fontSize: '0.8rem',
+                         cursor: 'pointer',
+                         fontWeight: 'bold',
+                         display: 'flex',
+                         alignItems: 'center',
+                         justifyContent: 'center',
+                         boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                       }}
+                     >
+                       ×
+                     </button>
+                   </div>
+                 ))}
+               </div>
+               <div style={{ fontSize: '0.8rem', color: pearsonColors.amethyst, marginTop: '0.5rem' }}>
+                 💡 Click on any image to view full size
+               </div>
+             </div>
+           )}
+         </div>
 
         {/* Audio upload */}
         <div style={{ marginBottom: '1rem' }}>
@@ -1877,43 +1986,74 @@ Created with HTMLwiz - Pearson Education`);
         {isBuilding ? 'Building Presentation...' : 'Download Interactive Presentation'}
       </button>
 
-      {/* Preview */}
-      {slides.length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <h4 style={{ marginBottom: '1rem' }}>Presentation Preview:</h4>
-          <div style={{ background: pearsonColors.lightPurple, borderRadius: 8, padding: 16, maxHeight: 400, overflowY: 'auto' }}>
-            {slides.map((slide, index) => (
-              <div key={index} style={{ 
-                marginBottom: 16, 
-                padding: 12, 
-                background: 'white', 
-                borderRadius: 8,
-                border: currentSlide === index ? `2px solid ${pearsonColors.purple}` : '1px solid #ddd'
-              }}>
-                <strong>Slide {slide.id}: {slide.title || `Untitled Slide`}</strong>
-                <div style={{ marginTop: 8, fontSize: '0.9rem' }}>
-                  {slide.content && <p style={{ margin: '4px 0' }}>{slide.content.substring(0, 100)}...</p>}
-                  {slide.images.length > 0 && (
-                    <div style={{ margin: '8px 0', color: pearsonColors.amethyst }}>
-                      📷 {slide.images.length} image(s)
-                    </div>
-                  )}
-                  {slide.audioUrl && (
-                    <div style={{ margin: '8px 0', color: pearsonColors.amethyst }}>
-                      🔊 Audio included
-                    </div>
-                  )}
-                  {slide.hyperlinks.length > 0 && (
-                    <div style={{ margin: '8px 0', color: pearsonColors.amethyst }}>
-                      🔗 {slide.hyperlinks.length} hyperlink(s)
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+             {/* Preview */}
+       {slides.length > 0 && (
+         <div style={{ marginTop: '2rem' }}>
+           <h4 style={{ marginBottom: '1rem' }}>Presentation Preview: {slides.length} slide(s)</h4>
+           <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: pearsonColors.amethyst }}>
+             📊 Total Content: {slides.reduce((acc, slide) => acc + slide.images.length, 0)} images, {slides.filter(slide => slide.audioUrl).length} audio files, {slides.reduce((acc, slide) => acc + slide.hyperlinks.length, 0)} hyperlinks
+           </div>
+           <div style={{ background: pearsonColors.lightPurple, borderRadius: 8, padding: 16, maxHeight: 400, overflowY: 'auto' }}>
+             {slides.map((slide, index) => (
+               <div key={index} style={{ 
+                 marginBottom: 16, 
+                 padding: 12, 
+                 background: 'white', 
+                 borderRadius: 8,
+                 border: currentSlide === index ? `3px solid ${pearsonColors.purple}` : '1px solid #ddd',
+                 cursor: 'pointer',
+                 transition: 'all 0.2s ease'
+               }}
+               onClick={() => setCurrentSlide(index)}
+               title={`Click to edit Slide ${slide.id}`}
+               >
+                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                   <strong style={{ color: currentSlide === index ? pearsonColors.purple : '#333' }}>
+                     Slide {slide.id}: {slide.title || `Untitled Slide`}
+                     {currentSlide === index && <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>✏️ Editing</span>}
+                   </strong>
+                   {slide.images.length > 0 && (
+                     <img 
+                       src={slide.images[0].url} 
+                       alt="Slide thumbnail"
+                       style={{ 
+                         width: 40, 
+                         height: 30, 
+                         objectFit: 'cover', 
+                         borderRadius: 4,
+                         border: `1px solid ${pearsonColors.amethyst}`
+                       }}
+                     />
+                   )}
+                 </div>
+                 <div style={{ marginTop: 8, fontSize: '0.9rem' }}>
+                   {slide.content && <p style={{ margin: '4px 0', color: '#666' }}>{slide.content.substring(0, 100)}{slide.content.length > 100 ? '...' : ''}</p>}
+                   <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+                     {slide.images.length > 0 && (
+                       <div style={{ color: pearsonColors.amethyst, fontSize: '0.8rem' }}>
+                         📷 {slide.images.length} image{slide.images.length !== 1 ? 's' : ''}
+                       </div>
+                     )}
+                     {slide.audioUrl && (
+                       <div style={{ color: pearsonColors.amethyst, fontSize: '0.8rem' }}>
+                         🔊 Audio
+                       </div>
+                     )}
+                     {slide.hyperlinks.length > 0 && (
+                       <div style={{ color: pearsonColors.amethyst, fontSize: '0.8rem' }}>
+                         🔗 {slide.hyperlinks.length} link{slide.hyperlinks.length !== 1 ? 's' : ''}
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </div>
+             ))}
+           </div>
+           <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: pearsonColors.amethyst }}>
+             💡 Click on any slide in the preview to edit it
+           </div>
+         </div>
+       )}
     </div>
   );
 }
