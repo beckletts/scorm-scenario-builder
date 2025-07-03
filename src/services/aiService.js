@@ -133,109 +133,92 @@ class AIService {
     // Extract meaningful content from the AI response
     const lines = text.split('\n').filter(line => line.trim().length > 0);
     
-    // Try to identify title and content
-    const title = lines[0]?.replace(/^(Title:|Scenario:|Here\s+are?\s+|This\s+is\s+)/i, '').trim() || 
-                  `Training Scenario: ${originalPrompt.slice(0, 50)}`;
+    // Look for scenario patterns or numbered items
+    const scenarios = [];
+    const scenarioPattern = /(?:scenario\s*\d*:\s*|task\s*\d*:\s*|\d+\.\s*|•\s*|-\s*)/i;
     
-    // Find the main content (skip obvious intro lines)
-    const contentLines = lines.filter(line => 
-      !line.toLowerCase().includes('here are') &&
-      !line.toLowerCase().includes('scenario:') &&
-      !line.toLowerCase().includes('title:') &&
-      line.trim().length > 20
-    );
+    let currentScenario = null;
+    let scenarioId = 1;
     
-    const mainContent = contentLines.slice(0, 2).join(' ') || 
-                       `You are presented with a situation related to ${originalPrompt}. How do you respond?`;
-
-    return [{
-      title: title,
-      description: `Interactive training scenario`,
-      scenes: [
-        {
-          scene_id: 1,
-          title: "Scenario Introduction",
-          content: mainContent,
-          choices: [
-            {
-              choice_id: 1,
-              text: "Approach with confidence",
-              next_scene: 2,
-              feedback: "Good choice! Confidence is important in this situation."
-            },
-            {
-              choice_id: 2,
-              text: "Gather more information first",
-              next_scene: 2,
-              feedback: "Smart thinking! Understanding the situation fully is wise."
-            },
-            {
-              choice_id: 3,
-              text: "Consult with a colleague",
-              next_scene: 2,
-              feedback: "Excellent! Collaboration often leads to better outcomes."
-            }
-          ]
-        },
-        {
-          scene_id: 2,
-          title: "Resolution",
-          content: "You have successfully navigated this training scenario. Well done!",
-          choices: []
+    for (const line of lines) {
+      const cleaned = line.trim();
+      
+      // Check if this looks like a new scenario
+      if (cleaned.match(scenarioPattern) && cleaned.length > 20) {
+        // Save previous scenario
+        if (currentScenario) {
+          scenarios.push(currentScenario);
         }
-      ]
-    }];
+        
+        // Create new scenario
+        const title = cleaned.replace(scenarioPattern, '').trim().slice(0, 100);
+        currentScenario = {
+          id: scenarioId++,
+          title: title || `Scenario ${scenarioId - 1}`,
+          description: ''
+        };
+      } else if (currentScenario && cleaned.length > 15) {
+        // Add to description of current scenario
+        if (currentScenario.description.length < 500) {
+          currentScenario.description += (currentScenario.description ? ' ' : '') + cleaned;
+        }
+      } else if (!currentScenario && cleaned.length > 30) {
+        // First meaningful line becomes a scenario
+        currentScenario = {
+          id: scenarioId++,
+          title: `Training Scenario ${scenarioId - 1}`,
+          description: cleaned.slice(0, 500)
+        };
+      }
+    }
+    
+    // Add the last scenario
+    if (currentScenario) {
+      scenarios.push(currentScenario);
+    }
+    
+    // If no scenarios found, create a basic one
+    if (scenarios.length === 0) {
+      scenarios.push({
+        id: 1,
+        title: `Training Scenario: ${originalPrompt.slice(0, 50)}`,
+        description: `You are presented with a situation related to ${originalPrompt}. Analyze the scenario and provide a detailed response explaining how you would handle this situation, including the steps you would take and the reasoning behind your approach.`
+      });
+    }
+    
+    // Ensure all scenarios have proper descriptions
+    scenarios.forEach(scenario => {
+      if (!scenario.description || scenario.description.length < 20) {
+        scenario.description = `Consider this ${originalPrompt.toLowerCase()} scenario: ${scenario.title}. Provide a detailed analysis and response.`;
+      }
+    });
+    
+    return scenarios.slice(0, 5); // Limit to 5 scenarios max
   }
 
   generateFallbackScenario(prompt) {
     const topic = prompt.toLowerCase().includes('customer') ? 'Customer Service' : 
                   prompt.toLowerCase().includes('safety') ? 'Safety Training' :
-                  prompt.toLowerCase().includes('sales') ? 'Sales Training' : 'Training';
+                  prompt.toLowerCase().includes('sales') ? 'Sales Training' : 
+                  prompt.toLowerCase().includes('exam') ? 'Exam Administration' : 'Training';
     
-    return [{
-      title: `${topic} Scenario`,
-      description: `Interactive ${topic.toLowerCase()} training scenario`,
-      scenes: [
-        {
-          scene_id: 1,
-          title: "Introduction",
-          content: `Welcome to this ${topic.toLowerCase()} training scenario. You'll practice handling real-world situations.`,
-          choices: [
-            {
-              choice_id: 1,
-              text: "Begin Training",
-              next_scene: 2,
-              feedback: "Great! Let's start with the first scenario."
-            }
-          ]
-        },
-        {
-          scene_id: 2,
-          title: "Scenario Challenge",
-          content: `You encounter a challenging situation related to ${topic.toLowerCase()}. How do you respond?`,
-          choices: [
-            {
-              choice_id: 1,
-              text: "Approach professionally",
-              next_scene: 3,
-              feedback: "Excellent choice! Professional approach is key."
-            },
-            {
-              choice_id: 2,
-              text: "Ask for help",
-              next_scene: 3,
-              feedback: "Good thinking! Seeking help when needed is important."
-            }
-          ]
-        },
-        {
-          scene_id: 3,
-          title: "Completion",
-          content: "Congratulations! You've completed the training scenario successfully.",
-          choices: []
-        }
-      ]
-    }];
+    return [
+      {
+        id: 1,
+        title: `${topic} Challenge`,
+        description: `You encounter a challenging situation in ${topic.toLowerCase()}. A client/student approaches you with a complex issue that requires careful handling. Analyze the situation and provide a detailed response explaining how you would address their concerns, what steps you would take, and what resources you might use to ensure a positive outcome.`
+      },
+      {
+        id: 2,
+        title: `${topic} Decision Making`,
+        description: `You need to make an important decision related to ${topic.toLowerCase()}. Multiple factors need to be considered, and different stakeholders have varying priorities. Explain your decision-making process, how you would weigh the different factors, and justify your final recommendation.`
+      },
+      {
+        id: 3,
+        title: `${topic} Communication`,
+        description: `You must communicate difficult or complex information related to ${topic.toLowerCase()} to someone who may not be familiar with the procedures or policies. Describe how you would structure your communication, what key points you would emphasize, and how you would ensure understanding.`
+      }
+    ];
   }
 
   async generateHTML(prompt, includeInteractivity = false) {
