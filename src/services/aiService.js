@@ -348,24 +348,429 @@ AVOID:
     ];
   }
 
-  async generateHTML(prompt, includeInteractivity = false) {
-    const systemPrompt = `Generate complete HTML with CSS. Include DOCTYPE, responsive styling${includeInteractivity ? ', JavaScript' : ''}. Keep concise.`;
+  async generateHTML(prompt, options = {}) {
+    const {
+      includeInteractivity = false,
+      contentType = 'general',
+      includeBranding = true
+    } = options;
+
+    const systemPrompt = this.buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding);
+    const enhancedPrompt = this.enhanceHTMLPrompt(prompt, contentType);
     
     try {
       const response = await this.callAPI({
         model: this.getModel(),
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
+          { role: 'user', content: enhancedPrompt }
         ],
         temperature: 0.6
       });
 
-      return response.content;
+      return this.postProcessHTML(response.content, contentType, includeBranding);
     } catch (error) {
       console.error('AI HTML generation failed:', error);
       throw new Error('Failed to generate HTML content');
     }
+  }
+
+  buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding) {
+    const basePrompt = `You are an expert HTML developer creating interactive training materials for Pearson Education. Generate complete, production-ready HTML with modern CSS and ${includeInteractivity ? 'interactive JavaScript' : 'responsive styling'}.`;
+    
+    const brandingGuidelines = includeBranding ? `
+PEARSON BRAND GUIDELINES:
+- Primary Color: #0B004A (purple)
+- Secondary Color: #6C2EB7 (amethyst)
+- Light Background: #E6E6F2
+- Font: Plus Jakarta Sans (fallback: Arial, sans-serif)
+- Use gradients: linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%)
+- Rounded corners: 8-16px border-radius
+- Shadows: 0 4px 12px rgba(11,0,74,0.1)
+- Consistent spacing: 1rem, 1.5rem, 2rem
+- Responsive breakpoints: 768px, 1024px` : '';
+
+    const contentTypePrompts = {
+      'quiz': `
+CREATE INTERACTIVE QUIZ:
+- Multiple choice questions with radio buttons
+- Drag & drop sorting exercises
+- True/false questions with immediate feedback
+- Progress indicators and score tracking
+- Accessible form elements with proper labels
+- Smooth animations and transitions
+- Submit functionality with results display`,
+
+      'sandbox': `
+CREATE SYSTEM SANDBOX:
+- Simulated interface elements (buttons, forms, menus)
+- Step-by-step process walkthroughs
+- Interactive hotspots with tooltips
+- Modal dialogs and overlays
+- Tabbed navigation for different sections
+- Breadcrumb navigation
+- Reset/restart functionality`,
+
+      'walkthrough': `
+CREATE PROCESS WALKTHROUGH:
+- Step-by-step numbered guides
+- Interactive checkboxes for completion
+- Collapsible sections for detailed information
+- Progress tracking with visual indicators
+- Navigation between steps
+- Print-friendly layout option
+- Accessibility features`,
+
+      'interactive': `
+CREATE INTERACTIVE CONTENT:
+- Clickable elements with hover effects
+- Expandable/collapsible sections
+- Interactive timelines or processes
+- Modal popups with additional information
+- Form validation and feedback
+- Smooth scroll navigation
+- Mobile-responsive interactions`,
+
+      'general': `
+CREATE TRAINING CONTENT:
+- Professional, clean layout
+- Responsive design for all devices
+- Clear typography hierarchy
+- Accessible color contrast
+- Interactive elements where appropriate`
+    };
+
+    return `${basePrompt}${brandingGuidelines}
+
+${contentTypePrompts[contentType] || contentTypePrompts['general']}
+
+TECHNICAL REQUIREMENTS:
+- HTML5 semantic elements
+- CSS Grid/Flexbox for layout
+- Vanilla JavaScript (no external libraries)
+- WCAG 2.1 AA accessibility compliance
+- Mobile-first responsive design
+- Progressive enhancement approach
+- Clean, maintainable code structure`;
+  }
+
+  enhanceHTMLPrompt(prompt, contentType) {
+    const components = this.getInteractiveComponentLibrary();
+    const jsLibrary = this.buildInteractiveJavaScript();
+    
+    const contentTypeEnhancements = {
+      'quiz': `Create an interactive quiz with multiple question types. Include immediate feedback, progress tracking, and a final results screen.
+
+AVAILABLE COMPONENTS (use and adapt as needed):
+${components.multipleChoice}
+${components.progressTracker}
+
+INTERACTIVE JAVASCRIPT (include at the bottom):
+${jsLibrary}`,
+
+      'sandbox': `Build a sandbox simulation of a system interface. Include interactive elements that users can click through to learn the process.
+
+AVAILABLE COMPONENTS (use and adapt as needed):
+${components.sandboxInterface}
+${components.progressTracker}
+
+INTERACTIVE JAVASCRIPT (include at the bottom):
+${jsLibrary}`,
+
+      'walkthrough': `Design a step-by-step process walkthrough with interactive checkboxes and progress indicators.
+
+AVAILABLE COMPONENTS (use and adapt as needed):
+${components.interactiveTimeline}
+${components.progressTracker}
+
+INTERACTIVE JAVASCRIPT (include at the bottom):
+${jsLibrary}`,
+
+      'interactive': `Create engaging interactive content with clickable elements, animations, and user engagement features.
+
+AVAILABLE COMPONENTS (use and adapt as needed):
+${components.dragDrop}
+${components.multipleChoice}
+${components.interactiveTimeline}
+${components.progressTracker}
+
+INTERACTIVE JAVASCRIPT (include at the bottom):
+${jsLibrary}`,
+
+      'general': 'Build professional training content with clear structure and engaging design.'
+    };
+
+    const enhancement = contentTypeEnhancements[contentType] || contentTypeEnhancements['general'];
+    
+    return `${enhancement}
+
+User Request: ${prompt}
+
+IMPORTANT: 
+- Use Pearson brand colors (#0B004A, #6C2EB7, #E6E6F2) and Plus Jakarta Sans font
+- Ensure all interactive elements are accessible with proper ARIA labels
+- Provide clear user feedback for all interactions
+- Include proper semantic HTML structure
+- Test interactivity on mobile devices`;
+  }
+
+  postProcessHTML(html, contentType, includeBranding) {
+    if (!includeBranding) {
+      return html;
+    }
+
+    // Ensure Pearson branding is applied
+    let processedHTML = html;
+
+    // Add Pearson font if not already included
+    if (!processedHTML.includes('Plus Jakarta Sans') && !processedHTML.includes('fonts.googleapis.com')) {
+      processedHTML = processedHTML.replace(
+        '<head>',
+        `<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">`
+      );
+    }
+
+    // Ensure proper title for training content
+    if (!processedHTML.includes('<title>') || processedHTML.includes('<title></title>')) {
+      processedHTML = processedHTML.replace(
+        /<title>.*?<\/title>/,
+        '<title>Pearson Training Module</title>'
+      );
+    }
+
+    return processedHTML;
+  }
+
+  getInteractiveComponentLibrary() {
+    return {
+      dragDrop: `
+<!-- Drag & Drop Component -->
+<div class="drag-drop-container" style="margin: 2rem 0;">
+  <h3 style="color: #0B004A; margin-bottom: 1rem;">Drag items to the correct categories:</h3>
+  <div class="drag-items" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; padding: 1rem; border: 2px dashed #6C2EB7; border-radius: 8px;">
+    <div class="drag-item" draggable="true" style="padding: 0.5rem 1rem; background: #E6E6F2; border-radius: 6px; cursor: grab;">Item 1</div>
+    <div class="drag-item" draggable="true" style="padding: 0.5rem 1rem; background: #E6E6F2; border-radius: 6px; cursor: grab;">Item 2</div>
+  </div>
+  <div class="drop-zones" style="display: flex; gap: 1rem;">
+    <div class="drop-zone" style="flex: 1; min-height: 100px; border: 2px solid #6C2EB7; border-radius: 8px; padding: 1rem; background: #faf9ff;">
+      <h4 style="margin: 0 0 0.5rem 0; color: #0B004A;">Category A</h4>
+    </div>
+    <div class="drop-zone" style="flex: 1; min-height: 100px; border: 2px solid #6C2EB7; border-radius: 8px; padding: 1rem; background: #faf9ff;">
+      <h4 style="margin: 0 0 0.5rem 0; color: #0B004A;">Category B</h4>
+    </div>
+  </div>
+</div>`,
+
+      multipleChoice: `
+<!-- Multiple Choice Component -->
+<div class="quiz-question" style="margin: 2rem 0; padding: 1.5rem; border: 2px solid #E6E6F2; border-radius: 12px; background: white;">
+  <h3 style="color: #0B004A; margin-bottom: 1rem;">Question: What is the best approach?</h3>
+  <div class="quiz-options">
+    <label style="display: block; margin: 0.5rem 0; padding: 0.75rem; border: 2px solid #E6E6F2; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+      <input type="radio" name="q1" value="a" style="margin-right: 0.5rem;"> Option A: First approach
+    </label>
+    <label style="display: block; margin: 0.5rem 0; padding: 0.75rem; border: 2px solid #E6E6F2; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+      <input type="radio" name="q1" value="b" style="margin-right: 0.5rem;"> Option B: Second approach
+    </label>
+    <label style="display: block; margin: 0.5rem 0; padding: 0.75rem; border: 2px solid #E6E6F2; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+      <input type="radio" name="q1" value="c" style="margin-right: 0.5rem;"> Option C: Third approach
+    </label>
+  </div>
+  <button onclick="checkAnswer('q1', 'b')" style="margin-top: 1rem; padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Submit Answer</button>
+  <div id="feedback-q1" style="margin-top: 1rem; padding: 1rem; border-radius: 8px; display: none;"></div>
+</div>`,
+
+      progressTracker: `
+<!-- Progress Tracker Component -->
+<div class="progress-container" style="margin: 2rem 0;">
+  <div class="progress-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h3 style="color: #0B004A; margin: 0;">Training Progress</h3>
+    <span class="progress-text" style="color: #6C2EB7; font-weight: 600;">0% Complete</span>
+  </div>
+  <div class="progress-bar" style="width: 100%; height: 12px; background: #E6E6F2; border-radius: 6px; overflow: hidden;">
+    <div class="progress-fill" style="width: 0%; height: 100%; background: linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%); transition: width 0.5s ease;"></div>
+  </div>
+  <div class="progress-steps" style="margin-top: 1rem; display: flex; justify-content: space-between;">
+    <div class="step active" style="flex: 1; text-align: center; padding: 0.5rem; border-radius: 6px; background: #faf9ff;">Step 1</div>
+    <div class="step" style="flex: 1; text-align: center; padding: 0.5rem; margin-left: 0.5rem; border-radius: 6px; background: #f5f5f5;">Step 2</div>
+    <div class="step" style="flex: 1; text-align: center; padding: 0.5rem; margin-left: 0.5rem; border-radius: 6px; background: #f5f5f5;">Step 3</div>
+  </div>
+</div>`,
+
+      interactiveTimeline: `
+<!-- Interactive Timeline Component -->
+<div class="timeline-container" style="margin: 2rem 0;">
+  <h3 style="color: #0B004A; margin-bottom: 2rem;">Process Timeline</h3>
+  <div class="timeline" style="position: relative; padding-left: 2rem;">
+    <div class="timeline-line" style="position: absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: #6C2EB7;"></div>
+    <div class="timeline-item" onclick="toggleStep(1)" style="position: relative; margin-bottom: 2rem; cursor: pointer;">
+      <div class="timeline-marker" style="position: absolute; left: -23px; width: 16px; height: 16px; background: #6C2EB7; border-radius: 50%; border: 4px solid white; box-shadow: 0 0 0 2px #6C2EB7;"></div>
+      <div class="timeline-content" style="padding: 1rem; border: 2px solid #E6E6F2; border-radius: 8px; background: white;">
+        <h4 style="color: #0B004A; margin: 0 0 0.5rem 0;">Step 1: Initial Assessment</h4>
+        <div class="timeline-details" style="display: none; margin-top: 1rem; padding: 1rem; background: #faf9ff; border-radius: 6px;">
+          <p style="margin: 0; color: #333;">Detailed explanation of the first step in the process...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`,
+
+      sandboxInterface: `
+<!-- Sandbox Interface Component -->
+<div class="sandbox-container" style="margin: 2rem 0; border: 2px solid #6C2EB7; border-radius: 12px; background: white;">
+  <div class="sandbox-header" style="padding: 1rem; background: linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%); color: white; border-radius: 10px 10px 0 0;">
+    <h3 style="margin: 0;">System Simulation</h3>
+    <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Practice using the interface below</p>
+  </div>
+  <div class="sandbox-content" style="padding: 2rem;">
+    <div class="simulated-interface" style="border: 1px solid #E6E6F2; border-radius: 8px; padding: 1.5rem; background: #fafafa;">
+      <div class="interface-buttons" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+        <button onclick="simulateAction('save')" style="padding: 0.75rem 1.5rem; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">Save</button>
+        <button onclick="simulateAction('cancel')" style="padding: 0.75rem 1.5rem; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancel</button>
+        <button onclick="simulateAction('help')" style="padding: 0.75rem 1.5rem; background: #6C2EB7; color: white; border: none; border-radius: 6px; cursor: pointer;">Help</button>
+      </div>
+      <div class="interface-content" style="padding: 1rem; background: white; border: 1px solid #ddd; border-radius: 6px;">
+        <p style="margin: 0; color: #666;">Click the buttons above to simulate different actions...</p>
+      </div>
+    </div>
+  </div>
+</div>`
+    };
+  }
+
+  buildInteractiveJavaScript() {
+    return `
+<script>
+// Drag and Drop Functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const dragItems = document.querySelectorAll('.drag-item');
+  const dropZones = document.querySelectorAll('.drop-zone');
+  
+  dragItems.forEach(item => {
+    item.addEventListener('dragstart', function(e) {
+      e.dataTransfer.setData('text/plain', e.target.textContent);
+      e.target.style.opacity = '0.5';
+    });
+    
+    item.addEventListener('dragend', function(e) {
+      e.target.style.opacity = '1';
+    });
+  });
+  
+  dropZones.forEach(zone => {
+    zone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      zone.style.background = '#f0f8ff';
+    });
+    
+    zone.addEventListener('dragleave', function(e) {
+      zone.style.background = '#faf9ff';
+    });
+    
+    zone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      const data = e.dataTransfer.getData('text/plain');
+      const newItem = document.createElement('div');
+      newItem.textContent = data;
+      newItem.style.padding = '0.5rem';
+      newItem.style.margin = '0.25rem 0';
+      newItem.style.background = '#E6E6F2';
+      newItem.style.borderRadius = '6px';
+      zone.appendChild(newItem);
+      zone.style.background = '#faf9ff';
+    });
+  });
+});
+
+// Quiz Answer Checking
+function checkAnswer(questionName, correctAnswer) {
+  const selected = document.querySelector('input[name="' + questionName + '"]:checked');
+  const feedback = document.getElementById('feedback-' + questionName);
+  
+  if (!selected) {
+    feedback.innerHTML = '<p style="color: #dc3545; margin: 0;">Please select an answer.</p>';
+    feedback.style.display = 'block';
+    return;
+  }
+  
+  if (selected.value === correctAnswer) {
+    feedback.innerHTML = '<p style="color: #28a745; margin: 0;">✅ Correct! Well done.</p>';
+    feedback.style.background = '#d4edda';
+    feedback.style.border = '2px solid #28a745';
+  } else {
+    feedback.innerHTML = '<p style="color: #dc3545; margin: 0;">❌ Incorrect. Please try again.</p>';
+    feedback.style.background = '#f8d7da';
+    feedback.style.border = '2px solid #dc3545';
+  }
+  feedback.style.display = 'block';
+}
+
+// Progress Tracking
+function updateProgress(percentage) {
+  const progressFill = document.querySelector('.progress-fill');
+  const progressText = document.querySelector('.progress-text');
+  
+  if (progressFill) {
+    progressFill.style.width = percentage + '%';
+    progressText.textContent = percentage + '% Complete';
+  }
+}
+
+// Timeline Interactions
+function toggleStep(stepNumber) {
+  const timelineItem = document.querySelector('.timeline-item:nth-child(' + (stepNumber + 1) + ') .timeline-details');
+  if (timelineItem) {
+    timelineItem.style.display = timelineItem.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// Sandbox Simulations
+function simulateAction(action) {
+  const content = document.querySelector('.interface-content p');
+  const messages = {
+    save: 'Data has been saved successfully! ✅',
+    cancel: 'Operation cancelled. No changes made. ⚠️',
+    help: 'Help documentation opened. View the user guide for assistance. 📚'
+  };
+  
+  if (content) {
+    content.textContent = messages[action] || 'Action completed.';
+    content.style.color = action === 'save' ? '#28a745' : action === 'cancel' ? '#dc3545' : '#0B004A';
+  }
+}
+
+// Enhanced Quiz Options Styling
+document.addEventListener('DOMContentLoaded', function() {
+  const labels = document.querySelectorAll('.quiz-options label');
+  labels.forEach(label => {
+    label.addEventListener('mouseenter', function() {
+      this.style.borderColor = '#6C2EB7';
+      this.style.background = '#faf9ff';
+    });
+    
+    label.addEventListener('mouseleave', function() {
+      if (!this.querySelector('input').checked) {
+        this.style.borderColor = '#E6E6F2';
+        this.style.background = 'white';
+      }
+    });
+    
+    label.querySelector('input').addEventListener('change', function() {
+      labels.forEach(l => {
+        l.style.borderColor = '#E6E6F2';
+        l.style.background = 'white';
+      });
+      if (this.checked) {
+        label.style.borderColor = '#6C2EB7';
+        label.style.background = '#faf9ff';
+      }
+    });
+  });
+});
+</script>`;
   }
 
   async generateProjectStructure(prompt) {
