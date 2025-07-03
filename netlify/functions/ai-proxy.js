@@ -102,7 +102,7 @@ exports.handler = async (event, context) => {
     console.log(`Making ${provider} API call`);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
     let response;
     try {

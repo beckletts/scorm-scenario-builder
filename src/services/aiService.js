@@ -365,153 +365,85 @@ AVOID:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: enhancedPrompt }
         ],
-        temperature: 0.6
+        temperature: 0.4,
+        max_tokens: 2000
       });
 
       return this.postProcessHTML(response.content, contentType, includeBranding);
     } catch (error) {
       console.error('AI HTML generation failed:', error);
+      
+      // Try with simplified prompt if original fails
+      if (error.message.includes('timeout') || error.message.includes('timed out')) {
+        console.log('Retrying with simplified prompt...');
+        try {
+          const simplifiedPrompt = `Create ${contentType} training content: ${prompt}. Use Pearson colors #0B004A, #6C2EB7. Include basic interactivity.`;
+          const response = await this.callAPI({
+            model: this.getModel(),
+            messages: [
+              { role: 'system', content: `Generate HTML training content with Pearson branding.` },
+              { role: 'user', content: simplifiedPrompt }
+            ],
+            temperature: 0.3,
+            max_tokens: 1500
+          });
+          
+          return this.postProcessHTML(response.content, contentType, includeBranding);
+        } catch (retryError) {
+          console.error('Simplified retry also failed:', retryError);
+        }
+      }
+      
       throw new Error('Failed to generate HTML content');
     }
   }
 
   buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding) {
-    const basePrompt = `You are an expert HTML developer creating interactive training materials for Pearson Education. Generate complete, production-ready HTML with modern CSS and ${includeInteractivity ? 'interactive JavaScript' : 'responsive styling'}.`;
+    const basePrompt = `Expert HTML developer creating ${contentType} training content for Pearson Education. Generate complete HTML with modern CSS${includeInteractivity ? ' and interactive JavaScript' : ''}.`;
     
-    const brandingGuidelines = includeBranding ? `
-PEARSON BRAND GUIDELINES:
-- Primary Color: #0B004A (purple)
-- Secondary Color: #6C2EB7 (amethyst)
-- Light Background: #E6E6F2
-- Font: Plus Jakarta Sans (fallback: Arial, sans-serif)
-- Use gradients: linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%)
-- Rounded corners: 8-16px border-radius
-- Shadows: 0 4px 12px rgba(11,0,74,0.1)
-- Consistent spacing: 1rem, 1.5rem, 2rem
-- Responsive breakpoints: 768px, 1024px` : '';
-
     const contentTypePrompts = {
-      'quiz': `
-CREATE INTERACTIVE QUIZ:
-- Multiple choice questions with radio buttons
-- Drag & drop sorting exercises
-- True/false questions with immediate feedback
-- Progress indicators and score tracking
-- Accessible form elements with proper labels
-- Smooth animations and transitions
-- Submit functionality with results display`,
-
-      'sandbox': `
-CREATE SYSTEM SANDBOX:
-- Simulated interface elements (buttons, forms, menus)
-- Step-by-step process walkthroughs
-- Interactive hotspots with tooltips
-- Modal dialogs and overlays
-- Tabbed navigation for different sections
-- Breadcrumb navigation
-- Reset/restart functionality`,
-
-      'walkthrough': `
-CREATE PROCESS WALKTHROUGH:
-- Step-by-step numbered guides
-- Interactive checkboxes for completion
-- Collapsible sections for detailed information
-- Progress tracking with visual indicators
-- Navigation between steps
-- Print-friendly layout option
-- Accessibility features`,
-
-      'interactive': `
-CREATE INTERACTIVE CONTENT:
-- Clickable elements with hover effects
-- Expandable/collapsible sections
-- Interactive timelines or processes
-- Modal popups with additional information
-- Form validation and feedback
-- Smooth scroll navigation
-- Mobile-responsive interactions`,
-
-      'general': `
-CREATE TRAINING CONTENT:
-- Professional, clean layout
-- Responsive design for all devices
-- Clear typography hierarchy
-- Accessible color contrast
-- Interactive elements where appropriate`
+      'quiz': 'Interactive quiz with multiple choice, drag & drop, feedback, and progress tracking.',
+      'sandbox': 'System interface simulation with clickable elements and step-by-step guidance.',
+      'walkthrough': 'Process guide with numbered steps, checkboxes, and progress indicators.',
+      'interactive': 'Engaging content with hover effects, modals, animations, and user interactions.',
+      'general': 'Professional training layout with clear hierarchy and responsive design.'
     };
 
-    return `${basePrompt}${brandingGuidelines}
+    const requirements = includeBranding ? `
+Use Pearson branding: #0B004A, #6C2EB7, #E6E6F2 colors, Plus Jakarta Sans font, rounded corners, gradients.
+Include: HTML5 semantics, CSS Grid/Flexbox, vanilla JavaScript, ARIA labels, mobile-responsive design.` : `
+Include: Modern CSS, responsive design, semantic HTML, accessibility features.`;
 
-${contentTypePrompts[contentType] || contentTypePrompts['general']}
-
-TECHNICAL REQUIREMENTS:
-- HTML5 semantic elements
-- CSS Grid/Flexbox for layout
-- Vanilla JavaScript (no external libraries)
-- WCAG 2.1 AA accessibility compliance
-- Mobile-first responsive design
-- Progressive enhancement approach
-- Clean, maintainable code structure`;
+    return `${basePrompt} ${contentTypePrompts[contentType] || contentTypePrompts['general']}${requirements}`;
   }
 
   enhanceHTMLPrompt(prompt, contentType) {
-    const components = this.getInteractiveComponentLibrary();
-    const jsLibrary = this.buildInteractiveJavaScript();
-    
     const contentTypeEnhancements = {
-      'quiz': `Create an interactive quiz with multiple question types. Include immediate feedback, progress tracking, and a final results screen.
-
-AVAILABLE COMPONENTS (use and adapt as needed):
-${components.multipleChoice}
-${components.progressTracker}
-
-INTERACTIVE JAVASCRIPT (include at the bottom):
-${jsLibrary}`,
-
-      'sandbox': `Build a sandbox simulation of a system interface. Include interactive elements that users can click through to learn the process.
-
-AVAILABLE COMPONENTS (use and adapt as needed):
-${components.sandboxInterface}
-${components.progressTracker}
-
-INTERACTIVE JAVASCRIPT (include at the bottom):
-${jsLibrary}`,
-
-      'walkthrough': `Design a step-by-step process walkthrough with interactive checkboxes and progress indicators.
-
-AVAILABLE COMPONENTS (use and adapt as needed):
-${components.interactiveTimeline}
-${components.progressTracker}
-
-INTERACTIVE JAVASCRIPT (include at the bottom):
-${jsLibrary}`,
-
-      'interactive': `Create engaging interactive content with clickable elements, animations, and user engagement features.
-
-AVAILABLE COMPONENTS (use and adapt as needed):
-${components.dragDrop}
-${components.multipleChoice}
-${components.interactiveTimeline}
-${components.progressTracker}
-
-INTERACTIVE JAVASCRIPT (include at the bottom):
-${jsLibrary}`,
-
-      'general': 'Build professional training content with clear structure and engaging design.'
+      'quiz': `Create an interactive quiz with multiple choice questions, drag & drop exercises, and immediate feedback. Include progress tracking and a results screen with Pearson branding.`,
+      
+      'sandbox': `Build a system interface sandbox with clickable buttons, simulated forms, and step-by-step guidance. Include reset functionality and help tooltips.`,
+      
+      'walkthrough': `Design an interactive process guide with numbered steps, checkboxes for completion, collapsible sections, and progress indicators.`,
+      
+      'interactive': `Create engaging content with hover effects, expandable sections, modal dialogs, animations, and interactive elements that respond to user actions.`,
+      
+      'general': `Build professional training content with clean layout, clear typography hierarchy, and responsive design.`
     };
 
     const enhancement = contentTypeEnhancements[contentType] || contentTypeEnhancements['general'];
     
     return `${enhancement}
 
-User Request: ${prompt}
+Content Request: ${prompt}
 
-IMPORTANT: 
-- Use Pearson brand colors (#0B004A, #6C2EB7, #E6E6F2) and Plus Jakarta Sans font
-- Ensure all interactive elements are accessible with proper ARIA labels
-- Provide clear user feedback for all interactions
-- Include proper semantic HTML structure
-- Test interactivity on mobile devices`;
+TECHNICAL REQUIREMENTS:
+- Use Pearson colors: #0B004A (primary), #6C2EB7 (secondary), #E6E6F2 (light)
+- Plus Jakarta Sans font (include Google Fonts link)
+- Responsive design with CSS Grid/Flexbox
+- Interactive JavaScript for user engagement
+- ARIA labels for accessibility
+- Mobile-first approach
+- Include complete HTML structure with DOCTYPE`;
   }
 
   postProcessHTML(html, contentType, includeBranding) {
@@ -519,21 +451,18 @@ IMPORTANT:
       return html;
     }
 
-    // Ensure Pearson branding is applied
     let processedHTML = html;
 
-    // Add Pearson font if not already included
+    // Add Pearson font if not included
     if (!processedHTML.includes('Plus Jakarta Sans') && !processedHTML.includes('fonts.googleapis.com')) {
       processedHTML = processedHTML.replace(
         '<head>',
         `<head>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">`
       );
     }
 
-    // Ensure proper title for training content
+    // Ensure proper title
     if (!processedHTML.includes('<title>') || processedHTML.includes('<title></title>')) {
       processedHTML = processedHTML.replace(
         /<title>.*?<\/title>/,
