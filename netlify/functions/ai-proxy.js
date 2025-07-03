@@ -68,7 +68,7 @@ exports.handler = async (event, context) => {
         // Convert OpenAI format to Anthropic format
         const anthropicPayload = {
           model: payload.model || 'claude-3-5-sonnet-20240620',
-          max_tokens: 4000,
+          max_tokens: 2000, // Reduced for faster response
           messages: payload.messages.map(msg => ({
             role: msg.role === 'system' ? 'user' : msg.role,
             content: msg.content
@@ -98,24 +98,35 @@ exports.handler = async (event, context) => {
         };
     }
 
-    // Make the API call
-    console.log(`Making ${provider} API call to:`, url);
-    console.log('Headers:', JSON.stringify(apiHeaders, null, 2));
-    console.log('Body:', body);
+    // Make the API call with timeout
+    console.log(`Making ${provider} API call`);
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: apiHeaders,
-      body
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: apiHeaders,
+        body,
+        signal: controller.signal
+      });
 
-    console.log('Response status:', response.status);
-    console.log('Response headers:', JSON.stringify([...response.headers.entries()], null, 2));
+      clearTimeout(timeoutId);
+      console.log('Response status:', response.status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API Error Response:', errorText);
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out - try a shorter prompt or simpler request');
+      }
+      throw error;
     }
 
     const data = await response.json();

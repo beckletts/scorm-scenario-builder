@@ -13,7 +13,7 @@ class AIService {
   }
 
   async generateSlideContent(prompt, slideCount = 5) {
-    const systemPrompt = `Generate ${slideCount} educational slides based on the user prompt. Return a JSON array where each slide has: title, content (detailed explanation), keyPoints (array of 3-4 bullet points), and suggestedImage (description for image generation).`;
+    const systemPrompt = `Generate ${slideCount} educational slides as JSON array. Each slide: {title, content, keyPoints}. Keep content concise.`;
     
     try {
       const response = await this.callAPI({
@@ -33,7 +33,7 @@ class AIService {
   }
 
   async generateScenario(prompt) {
-    const systemPrompt = `Generate an interactive learning scenario in JSON format. Include: title, description, scenes array with scene_id, title, content, choices array (each with choice_id, text, next_scene, feedback), and completion message. Make it engaging and educational.`;
+    const systemPrompt = `Generate learning scenario JSON: {title, description, scenes: [{scene_id, title, content, choices: [{choice_id, text, next_scene, feedback}]}]}. Keep concise.`;
     
     try {
       const response = await this.callAPI({
@@ -53,7 +53,7 @@ class AIService {
   }
 
   async generateHTML(prompt, includeInteractivity = false) {
-    const systemPrompt = `Generate complete, professional HTML content based on the user prompt. Include proper DOCTYPE, responsive CSS styling, and ${includeInteractivity ? 'interactive JavaScript elements' : 'static content'}. Use modern web standards and ensure accessibility.`;
+    const systemPrompt = `Generate complete HTML with CSS. Include DOCTYPE, responsive styling${includeInteractivity ? ', JavaScript' : ''}. Keep concise.`;
     
     try {
       const response = await this.callAPI({
@@ -185,7 +185,7 @@ class AIService {
         
         return {
           model: getValidModel(this.provider, payload.model),
-          max_tokens: 4000,
+          max_tokens: 2000, // Reduced for faster responses
           messages: messages,
           temperature: payload.temperature || 0.7
         };
