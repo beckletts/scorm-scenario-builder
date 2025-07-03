@@ -33,14 +33,13 @@ class AIService {
   }
 
   async generateScenario(prompt) {
-    const systemPrompt = `Generate learning scenario JSON: {title, description, scenes: [{scene_id, title, content, choices: [{choice_id, text, next_scene, feedback}]}]}. Keep concise.`;
+    const systemPrompt = `JSON scenario: {title, scenes: [{id:1, title, content, choices: [{id:1, text, next:2, feedback}]}]}`;
     
     try {
       const response = await this.callAPI({
         model: this.getModel(),
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
+          { role: 'user', content: `${systemPrompt}\n\n${prompt}` }
         ],
         temperature: 0.8
       });
@@ -48,8 +47,66 @@ class AIService {
       return JSON.parse(response.content);
     } catch (error) {
       console.error('AI scenario generation failed:', error);
+      
+      // Fallback: Generate a simple template scenario
+      if (error.message.includes('timed out') || error.message.includes('timeout')) {
+        console.log('Using fallback scenario template');
+        return this.generateFallbackScenario(prompt);
+      }
+      
       throw new Error('Failed to generate scenario');
     }
+  }
+
+  generateFallbackScenario(prompt) {
+    const topic = prompt.toLowerCase().includes('customer') ? 'Customer Service' : 
+                  prompt.toLowerCase().includes('safety') ? 'Safety Training' :
+                  prompt.toLowerCase().includes('sales') ? 'Sales Training' : 'Training';
+    
+    return [{
+      title: `${topic} Scenario`,
+      description: `Interactive ${topic.toLowerCase()} training scenario`,
+      scenes: [
+        {
+          scene_id: 1,
+          title: "Introduction",
+          content: `Welcome to this ${topic.toLowerCase()} training scenario. You'll practice handling real-world situations.`,
+          choices: [
+            {
+              choice_id: 1,
+              text: "Begin Training",
+              next_scene: 2,
+              feedback: "Great! Let's start with the first scenario."
+            }
+          ]
+        },
+        {
+          scene_id: 2,
+          title: "Scenario Challenge",
+          content: `You encounter a challenging situation related to ${topic.toLowerCase()}. How do you respond?`,
+          choices: [
+            {
+              choice_id: 1,
+              text: "Approach professionally",
+              next_scene: 3,
+              feedback: "Excellent choice! Professional approach is key."
+            },
+            {
+              choice_id: 2,
+              text: "Ask for help",
+              next_scene: 3,
+              feedback: "Good thinking! Seeking help when needed is important."
+            }
+          ]
+        },
+        {
+          scene_id: 3,
+          title: "Completion",
+          content: "Congratulations! You've completed the training scenario successfully.",
+          choices: []
+        }
+      ]
+    }];
   }
 
   async generateHTML(prompt, includeInteractivity = false) {
@@ -185,7 +242,7 @@ class AIService {
         
         return {
           model: getValidModel(this.provider, payload.model),
-          max_tokens: 2000, // Reduced for faster responses
+          max_tokens: 1000, // Further reduced for speed
           messages: messages,
           temperature: payload.temperature || 0.7
         };
