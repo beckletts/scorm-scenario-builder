@@ -104,23 +104,27 @@ class AIService {
 
   async generateScenario(prompt) {
     try {
+      const scenarioPrompt = this.buildScenarioPrompt(prompt);
       const response = await this.callAPI({
         model: this.getModel(),
         messages: [
-          { role: 'user', content: `Generate training scenarios about: ${prompt}. Create 2-3 specific situations that require analysis and response. Do not include examples or template text.` }
+          { role: 'system', content: 'You are a training scenario generator for Pearson customer service and educational staff. Generate only valid training scenarios in the exact JSON format requested. Do not include explanations, examples, or template text.' },
+          { role: 'user', content: scenarioPrompt }
         ],
-        temperature: 0.8
+        temperature: 0.7
       });
 
-      // Check if response contains API key or sensitive data
-      if (response.content.includes('sk-') || response.content.includes('api') || response.content.length < 50) {
+      // Enhanced validation
+      if (this.isInvalidResponse(response.content)) {
         console.log('Invalid AI response detected, using fallback');
         return this.generateFallbackScenario(prompt);
       }
 
       // Try to parse JSON first
       try {
-        return JSON.parse(response.content);
+        const parsed = JSON.parse(response.content);
+        const validated = this.validateScenarios(parsed, prompt);
+        return validated;
       } catch (parseError) {
         // If not JSON, convert plain text to scenario format
         console.log('Converting plain text response to scenario format');
@@ -133,6 +137,95 @@ class AIService {
       console.log('Using fallback scenario template');
       return this.generateFallbackScenario(prompt);
     }
+  }
+
+  buildScenarioPrompt(prompt) {
+    return `Generate 2-3 training scenarios for: ${prompt}
+
+REQUIREMENTS:
+- Each scenario must be a realistic, specific situation requiring problem-solving
+- Focus on customer service, educational, or professional training contexts
+- Include challenging but realistic situations staff might encounter
+- Provide enough detail for meaningful analysis and response
+
+STRICT JSON FORMAT (respond with ONLY this JSON, no other text):
+[
+  {
+    "id": 1,
+    "title": "Specific scenario title (descriptive, not generic)",
+    "description": "Detailed scenario description (100-300 words) presenting a specific situation that requires analysis and response. Include context, stakeholders, and the challenge to be addressed."
+  },
+  {
+    "id": 2,
+    "title": "Another specific scenario title",
+    "description": "Another detailed scenario description presenting a different challenging situation requiring problem-solving skills."
+  }
+]
+
+AVOID:
+- Generic titles like "Scenario 1" or "Training Example"
+- Template language or meta-commentary
+- References to examples or instructions
+- API keys or technical references
+- Overly simple or unrealistic situations`;
+  }
+
+  isInvalidResponse(content) {
+    // Enhanced validation checks
+    return (
+      content.includes('sk-') ||
+      content.includes('api') ||
+      content.length < 50 ||
+      content.toLowerCase().includes('i cannot') ||
+      content.toLowerCase().includes('i am unable') ||
+      content.toLowerCase().includes('template') ||
+      content.toLowerCase().includes('example') ||
+      content.toLowerCase().includes('here are') ||
+      content.toLowerCase().includes('here is') ||
+      !content.includes('"title"') ||
+      !content.includes('"description"')
+    );
+  }
+
+  validateScenarios(scenarios, originalPrompt = '') {
+    // Ensure we have an array
+    const scenarioArray = Array.isArray(scenarios) ? scenarios : [scenarios];
+    
+    // Filter and validate each scenario
+    const validScenarios = scenarioArray.filter(scenario => {
+      return (
+        scenario &&
+        typeof scenario === 'object' &&
+        scenario.title &&
+        scenario.description &&
+        scenario.title.length > 10 &&
+        scenario.description.length > 50 &&
+        !scenario.title.toLowerCase().includes('scenario') &&
+        !scenario.title.toLowerCase().includes('example') &&
+        this.isActualScenario(scenario.description)
+      );
+    });
+
+    // Add IDs if missing
+    validScenarios.forEach((scenario, index) => {
+      if (!scenario.id) {
+        scenario.id = index + 1;
+      }
+    });
+
+    return validScenarios.length > 0 ? validScenarios : this.generateFallbackScenario(originalPrompt);
+  }
+
+  isActualScenario(description) {
+    // Check if description contains scenario-like content
+    const scenarioKeywords = [
+      'situation', 'customer', 'client', 'student', 'challenge', 'problem',
+      'encounter', 'approaches', 'needs', 'requests', 'complains', 'asks',
+      'issue', 'concern', 'difficulty', 'questions', 'confused', 'upset'
+    ];
+    
+    const lowerDesc = description.toLowerCase();
+    return scenarioKeywords.some(keyword => lowerDesc.includes(keyword));
   }
 
   convertTextToScenario(text, originalPrompt) {

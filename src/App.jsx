@@ -1021,6 +1021,8 @@ function ScenarioTab() {
   const [json, setJson] = useState('');
   const [scenarios, setScenarios] = useState([]);
   const [error, setError] = useState('');
+  const [reviewScenarios, setReviewScenarios] = useState([]);
+  const [showReview, setShowReview] = useState(false);
 
   function handlePreview() {
     try {
@@ -1073,17 +1075,52 @@ function ScenarioTab() {
         scenariosArray = [scenarioData];
       }
       
-      // Update the JSON textarea with generated content
-      setJson(JSON.stringify(scenariosArray, null, 2));
+      // Add enabled flag to each scenario for review interface
+      const reviewableScenarios = scenariosArray.map(scenario => ({
+        ...scenario,
+        enabled: true,
+        originalTitle: scenario.title,
+        originalDescription: scenario.description
+      }));
       
-      // Auto-preview the generated scenarios
-      setScenarios(scenariosArray);
+      // Show review interface instead of directly setting scenarios
+      setReviewScenarios(reviewableScenarios);
+      setShowReview(true);
       setError('');
       
     } catch (error) {
       console.error('AI scenario generation failed:', error);
       throw error;
     }
+  };
+
+  // Review interface handlers
+  const handleScenarioToggle = (index) => {
+    setReviewScenarios(prev => prev.map((scenario, i) => 
+      i === index ? { ...scenario, enabled: !scenario.enabled } : scenario
+    ));
+  };
+
+  const handleScenarioEdit = (index, field, value) => {
+    setReviewScenarios(prev => prev.map((scenario, i) => 
+      i === index ? { ...scenario, [field]: value } : scenario
+    ));
+  };
+
+  const handleApproveScenarios = () => {
+    const approvedScenarios = reviewScenarios
+      .filter(scenario => scenario.enabled)
+      .map(({ enabled, originalTitle, originalDescription, ...scenario }) => scenario);
+    
+    setJson(JSON.stringify(approvedScenarios, null, 2));
+    setScenarios(approvedScenarios);
+    setShowReview(false);
+    setError('');
+  };
+
+  const handleCancelReview = () => {
+    setShowReview(false);
+    setReviewScenarios([]);
   };
 
   function handleFileChange(e) {
@@ -1930,6 +1967,187 @@ Total Scenarios: ${scenarios.length}
     a.href = URL.createObjectURL(blob);
     a.download = 'scenario-assessment-website.zip';
     a.click();
+  }
+
+  // Review interface component
+  if (showReview) {
+    return (
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ 
+          background: 'linear-gradient(135deg, #f8f7ff 0%, #ffffff 100%)',
+          borderRadius: '16px',
+          padding: '2rem',
+          marginBottom: '2rem',
+          border: '2px solid #e6e6f2'
+        }}>
+          <h2 style={{ 
+            color: pearsonColors.purple, 
+            marginBottom: '1rem',
+            fontSize: '1.5rem',
+            fontWeight: '700'
+          }}>
+            🔍 Review AI-Generated Scenarios
+          </h2>
+          <p style={{ 
+            color: '#666',
+            marginBottom: '1.5rem',
+            fontSize: '1rem',
+            lineHeight: '1.6'
+          }}>
+            Review and edit the AI-generated scenarios below. You can toggle scenarios on/off, edit titles and descriptions, or make other adjustments before adding them to your training.
+          </p>
+          
+          {reviewScenarios.map((scenario, index) => (
+            <div key={index} style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              marginBottom: '1rem',
+              border: `2px solid ${scenario.enabled ? pearsonColors.amethyst : '#e6e6f2'}`,
+              opacity: scenario.enabled ? 1 : 0.6,
+              transition: 'all 0.3s ease'
+            }}>
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '1rem'
+              }}>
+                <label style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  color: scenario.enabled ? pearsonColors.purple : '#999'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={scenario.enabled}
+                    onChange={() => handleScenarioToggle(index)}
+                    style={{ 
+                      width: '18px',
+                      height: '18px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  Include Scenario {index + 1}
+                </label>
+                <span style={{
+                  fontSize: '0.8rem',
+                  color: '#666',
+                  padding: '0.25rem 0.5rem',
+                  background: '#f0f0f0',
+                  borderRadius: '4px'
+                }}>
+                  ID: {scenario.id}
+                </span>
+              </div>
+              
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ 
+                  display: 'block',
+                  fontWeight: '600',
+                  color: pearsonColors.purple,
+                  marginBottom: '0.5rem'
+                }}>
+                  Title:
+                </label>
+                <input
+                  type="text"
+                  value={scenario.title}
+                  onChange={(e) => handleScenarioEdit(index, 'title', e.target.value)}
+                  disabled={!scenario.enabled}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid #e6e6f2',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    fontFamily: 'inherit',
+                    background: scenario.enabled ? 'white' : '#f5f5f5',
+                    color: scenario.enabled ? '#333' : '#999'
+                  }}
+                />
+              </div>
+              
+              <div>
+                <label style={{ 
+                  display: 'block',
+                  fontWeight: '600',
+                  color: pearsonColors.purple,
+                  marginBottom: '0.5rem'
+                }}>
+                  Description:
+                </label>
+                <textarea
+                  value={scenario.description}
+                  onChange={(e) => handleScenarioEdit(index, 'description', e.target.value)}
+                  disabled={!scenario.enabled}
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid #e6e6f2',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    fontFamily: 'inherit',
+                    lineHeight: '1.5',
+                    resize: 'vertical',
+                    background: scenario.enabled ? 'white' : '#f5f5f5',
+                    color: scenario.enabled ? '#333' : '#999'
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+          
+          <div style={{ 
+            display: 'flex',
+            gap: '1rem',
+            justifyContent: 'center',
+            marginTop: '2rem'
+          }}>
+            <button
+              onClick={handleApproveScenarios}
+              disabled={!reviewScenarios.some(s => s.enabled)}
+              style={{
+                background: reviewScenarios.some(s => s.enabled) 
+                  ? `linear-gradient(135deg, ${pearsonColors.purple} 0%, ${pearsonColors.amethyst} 100%)` 
+                  : '#ccc',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '1rem 2rem',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: reviewScenarios.some(s => s.enabled) ? 'pointer' : 'not-allowed',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              ✅ Approve & Continue ({reviewScenarios.filter(s => s.enabled).length} scenarios)
+            </button>
+            <button
+              onClick={handleCancelReview}
+              style={{
+                background: '#f5f5f5',
+                color: '#666',
+                border: '2px solid #e6e6f2',
+                borderRadius: '8px',
+                padding: '1rem 2rem',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              ❌ Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
