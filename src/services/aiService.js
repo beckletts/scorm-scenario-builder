@@ -91,10 +91,16 @@ class AIService {
   }
 
   async callAPI(payload) {
-    if (!this.apiKey) {
+    if (!this.apiKey && this.provider !== 'ollama') {
       throw new Error('API key not configured');
     }
 
+    // Check if we're in browser environment and use proxy
+    if (typeof window !== 'undefined' && this.provider !== 'ollama') {
+      return this.callViaProxy(payload);
+    }
+
+    // Direct API call (for Node.js environments or local Ollama)
     const url = this.provider === 'ollama' 
       ? `${this.baseUrls[this.provider]}/generate`
       : `${this.baseUrls[this.provider]}/chat/completions`;
@@ -114,6 +120,31 @@ class AIService {
 
     const data = await response.json();
     return this.parseResponse(data);
+  }
+
+  async callViaProxy(payload) {
+    // Use Netlify function proxy to avoid CORS issues
+    const proxyUrl = '/.netlify/functions/ai-proxy';
+    
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        provider: this.provider,
+        apiKey: this.apiKey,
+        payload: this.formatPayload(payload)
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Proxy request failed: ${errorData}`);
+    }
+
+    const data = await response.json();
+    return data; // Proxy already returns normalized format
   }
 
   getHeaders() {

@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HTMLwiz Transcript Schema",
+  "description": "Schema for generating properly formatted transcripts for HTMLwiz audio splitting functionality",
+  "type": "object",
+  "properties": {
+    "transcript": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Overall title of the presentation or course"
+        },
+        "totalDuration": {
+          "type": "string",
+          "pattern": "^([0-9]+:)?[0-9]{1,2}:[0-9]{2}$",
+          "description": "Total duration in HH:MM:SS or MM:SS format"
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "pattern": "^([0-9]+:)?[0-9]{1,2}:[0-9]{2}$",
+                "description": "Start time in HH:MM:SS or MM:SS format"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 100,
+                "description": "Section title that clearly describes the content"
+              },
+              "content": {
+                "type": "string",
+                "minLength": 50,
+                "description": "Section content/transcript text"
+              },
+              "estimatedDuration": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 600,
+                "description": "Estimated duration in seconds"
+              }
+            },
+            "required": ["timestamp", "title", "content"]
+          }
+        }
+      },
+      "required": ["title", "sections"]
+    }
+  },
+  "examples": [
+    {
+      "transcript": {
+        "title": "Document Management Training",
+        "totalDuration": "29:00",
+        "sections": [
+          {
+            "timestamp": "00:00",
+            "title": "Welcome & Course Overview",
+            "content": "Welcome to the Document Management e-training course. This course is designed to help Pearson Education Ltd staff understand the importance of good document management and stay compliant to our policies. The course will take approximately 25 minutes to complete and includes a knowledge check quiz at the end.",
+            "estimatedDuration": 120
+          },
+          {
+            "timestamp": "02:00",
+            "title": "Introduction to Document Management",
+            "content": "Good document management is crucial for ensuring that an organisation's information is secure, organised, accessible, compliant with legal and regulatory requirements, and usable throughout its lifecycle.",
+            "estimatedDuration": 180
+          }
+        ]
+      }
+    }
+  ],
+  "formatting_rules": {
+    "output_format": {
+      "description": "Convert JSON to text format for HTMLwiz",
+      "template": "[{timestamp}] TITLE: {title}\n{content}\n\n",
+      "example": "[00:00] TITLE: Welcome & Course Overview\nWelcome to the Document Management e-training course...\n\n[02:00] TITLE: Introduction to Document Management\nGood document management is crucial...\n\n"
+    },
+    "timestamp_formats": [
+      "[MM:SS] - Standard format (recommended)",
+      "[HH:MM:SS] - Extended format for longer content",
+      "[M:SS] - Short format acceptable"
+    ],
+    "title_patterns": [
+      "TITLE: {title}",
+      "Title: {title}",
+      "[{title}]",
+      "# {title}",
+      "1. {title}",
+      "SLIDE: {title}",
+      "MODULE: {title}"
+    ],
+    "alternative_separators": [
+      "---",
+      "[Slide {number}]",
+      "\\n\\s*\\n"
+    ]
+  },
+  "validation_rules": {
+    "section_count": {
+      "minimum": 3,
+      "maximum": 20,
+      "optimal": "5-15"
+    },
+    "section_duration": {
+      "minimum_seconds": 30,
+      "maximum_seconds": 600,
+      "optimal_seconds": "60-300"
+    },
+    "title_length": {
+      "minimum": 3,
+      "maximum": 100,
+      "optimal": "10-50"
+    },
+    "content_length": {
+      "minimum_words": 10,
+      "optimal_words": "50-200"
+    }
+  },
+  "ai_prompt_template": "Please convert this content into a properly formatted transcript for HTMLwiz using timestamp markers [MM:SS], clear section titles with 'TITLE:' prefix, and logical content breaks. Aim for 5-15 sections, each 1-5 minutes long. Format: [00:00] TITLE: Section Name\\nSection content here...\\n\\n[03:45] TITLE: Next Section\\nNext content here..."
+} 

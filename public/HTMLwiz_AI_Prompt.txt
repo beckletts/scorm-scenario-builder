@@ -1,0 +1,30 @@
+HTMLwiz Transcript Formatter - AI Prompt
+
+Please format this content as a timestamped transcript for HTMLwiz slide generation. Follow this exact schema:
+
+FORMAT REQUIREMENTS:
+- Use timestamp markers: [MM:SS] at the start of each section
+- Add "TITLE: [Section Name]" after each timestamp
+- Create 5-15 logical sections, each 1-5 minutes long
+- Maintain original content while adding structure
+
+EXAMPLE FORMAT:
+[00:00] TITLE: Welcome & Overview
+Introduction content explaining the course objectives and structure.
+
+[02:30] TITLE: Main Concepts
+Core topic explanation with key details and examples.
+
+[05:15] TITLE: Practical Applications
+Real-world examples and implementation strategies.
+
+[08:00] TITLE: Conclusion
+Summary of key points and next steps.
+
+ALTERNATIVE TITLE FORMATS (if no timestamps available):
+- Use "---" to separate sections, OR
+- Use "[Slide 1]", "[Slide 2]" markers
+
+Please convert the following content using this format:
+
+[PASTE YOUR CONTENT HERE] 
