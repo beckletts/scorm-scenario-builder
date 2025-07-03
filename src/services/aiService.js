@@ -107,10 +107,16 @@ class AIService {
       const response = await this.callAPI({
         model: this.getModel(),
         messages: [
-          { role: 'user', content: `Create a simple training scenario about: ${prompt}` }
+          { role: 'user', content: `Generate training scenarios about: ${prompt}. Create 2-3 specific situations that require analysis and response. Do not include examples or template text.` }
         ],
         temperature: 0.8
       });
+
+      // Check if response contains API key or sensitive data
+      if (response.content.includes('sk-') || response.content.includes('api') || response.content.length < 50) {
+        console.log('Invalid AI response detected, using fallback');
+        return this.generateFallbackScenario(prompt);
+      }
 
       // Try to parse JSON first
       try {
@@ -130,8 +136,26 @@ class AIService {
   }
 
   convertTextToScenario(text, originalPrompt) {
-    // Extract meaningful content from the AI response
-    const lines = text.split('\n').filter(line => line.trim().length > 0);
+    // Clean the response text first
+    let cleanedText = text;
+    
+    // Remove API keys and sensitive data
+    cleanedText = cleanedText.replace(/sk-[a-zA-Z0-9_-]+/g, '');
+    cleanedText = cleanedText.replace(/api[_-]?key/gi, '');
+    
+    // Remove ID examples and template references
+    cleanedText = cleanedText.replace(/\bid\s*:\s*[12]\b/gi, '');
+    cleanedText = cleanedText.replace(/\b(id|ID)\s*[12]\b/g, '');
+    cleanedText = cleanedText.replace(/example\s*\d*/gi, '');
+    cleanedText = cleanedText.replace(/template/gi, '');
+    
+    const lines = cleanedText.split('\n').filter(line => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && 
+             !trimmed.match(/^(here\s+(are|is)|this\s+is|below|above)/i) &&
+             !trimmed.includes('sk-') &&
+             !trimmed.match(/\bid\s*[12]\b/i);
+    });
     
     // Look for scenario patterns or numbered items
     const scenarios = [];
@@ -143,10 +167,15 @@ class AIService {
     for (const line of lines) {
       const cleaned = line.trim();
       
+      // Skip lines that look like metadata or examples
+      if (cleaned.match(/^(note|example|template|format)/i) || cleaned.length < 15) {
+        continue;
+      }
+      
       // Check if this looks like a new scenario
       if (cleaned.match(scenarioPattern) && cleaned.length > 20) {
         // Save previous scenario
-        if (currentScenario) {
+        if (currentScenario && currentScenario.description.length > 20) {
           scenarios.push(currentScenario);
         }
         
@@ -157,9 +186,9 @@ class AIService {
           title: title || `Scenario ${scenarioId - 1}`,
           description: ''
         };
-      } else if (currentScenario && cleaned.length > 15) {
+      } else if (currentScenario && cleaned.length > 20) {
         // Add to description of current scenario
-        if (currentScenario.description.length < 500) {
+        if (currentScenario.description.length < 400) {
           currentScenario.description += (currentScenario.description ? ' ' : '') + cleaned;
         }
       } else if (!currentScenario && cleaned.length > 30) {
@@ -167,13 +196,13 @@ class AIService {
         currentScenario = {
           id: scenarioId++,
           title: `Training Scenario ${scenarioId - 1}`,
-          description: cleaned.slice(0, 500)
+          description: cleaned.slice(0, 400)
         };
       }
     }
     
-    // Add the last scenario
-    if (currentScenario) {
+    // Add the last scenario if it has content
+    if (currentScenario && currentScenario.description.length > 20) {
       scenarios.push(currentScenario);
     }
     
@@ -186,14 +215,19 @@ class AIService {
       });
     }
     
-    // Ensure all scenarios have proper descriptions
+    // Clean up scenario content
     scenarios.forEach(scenario => {
-      if (!scenario.description || scenario.description.length < 20) {
-        scenario.description = `Consider this ${originalPrompt.toLowerCase()} scenario: ${scenario.title}. Provide a detailed analysis and response.`;
+      // Remove any remaining ID references
+      scenario.title = scenario.title.replace(/\bid\s*[12]\b/gi, '').trim();
+      scenario.description = scenario.description.replace(/\bid\s*[12]\b/gi, '').trim();
+      
+      // Ensure minimum description length
+      if (scenario.description.length < 30) {
+        scenario.description = `Consider this ${originalPrompt.toLowerCase()} scenario: ${scenario.title}. Provide a detailed analysis and response explaining your approach.`;
       }
     });
     
-    return scenarios.slice(0, 5); // Limit to 5 scenarios max
+    return scenarios.slice(0, 4); // Limit to 4 scenarios max for better UX
   }
 
   generateFallbackScenario(prompt) {
