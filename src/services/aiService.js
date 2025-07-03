@@ -169,11 +169,23 @@ class AIService {
   formatPayload(payload) {
     switch (this.provider) {
       case 'anthropic':
+        // Anthropic uses a different message format
+        const messages = payload.messages.filter(m => m.role !== 'system');
+        const systemMessage = payload.messages.find(m => m.role === 'system');
+        
+        // If there's a system message, prepend it to the first user message
+        if (systemMessage && messages.length > 0 && messages[0].role === 'user') {
+          messages[0] = {
+            ...messages[0],
+            content: systemMessage.content + '\n\n' + messages[0].content
+          };
+        }
+        
         return {
-          model: payload.model,
+          model: payload.model || 'claude-3-sonnet-20240229',
           max_tokens: 4000,
-          messages: payload.messages,
-          temperature: payload.temperature
+          messages: messages,
+          temperature: payload.temperature || 0.7
         };
       case 'ollama':
         return {
