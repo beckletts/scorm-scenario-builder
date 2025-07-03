@@ -1,3 +1,5 @@
+import { getValidModel } from '../utils/modelConfig.js';
+
 // AI Content Generation Service
 class AIService {
   constructor(apiKey, provider = 'openai') {
@@ -182,7 +184,7 @@ class AIService {
         }
         
         return {
-          model: payload.model || 'claude-3-sonnet-20240229',
+          model: getValidModel(this.provider, payload.model),
           max_tokens: 4000,
           messages: messages,
           temperature: payload.temperature || 0.7
@@ -210,16 +212,7 @@ class AIService {
   }
 
   getModel() {
-    switch (this.provider) {
-      case 'openai':
-        return 'gpt-4';
-      case 'anthropic':
-        return 'claude-3-sonnet-20240229';
-      case 'ollama':
-        return 'llama2'; // or any local model
-      default:
-        return 'gpt-4';
-    }
+    return getValidModel(this.provider);
   }
 }
 

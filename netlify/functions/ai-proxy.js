@@ -67,7 +67,7 @@ exports.handler = async (event, context) => {
         };
         // Convert OpenAI format to Anthropic format
         const anthropicPayload = {
-          model: payload.model || 'claude-3-sonnet-20240229',
+          model: payload.model || 'claude-3-5-sonnet-20240620',
           max_tokens: 4000,
           messages: payload.messages.map(msg => ({
             role: msg.role === 'system' ? 'user' : msg.role,
