@@ -5,9 +5,11 @@ import '../logos/pearson-favicon.svg'
 import '@fontsource/plus-jakarta-sans'
 import styled, { createGlobalStyle } from 'styled-components'
 import JSZip from 'jszip'
+import pptxgen from 'pptxgenjs'
 import AIPromptInput from './components/AIPromptInput'
 import AIConfigModal from './components/AIConfigModal'
 import { initializeAI, getAIService } from './services/aiService'
+import { extractPowerPointContent } from './utils/powerPointParser'
 
 const pearsonColors = {
   purple: '#0B004A',
@@ -3354,6 +3356,15 @@ function SlideBuilderTab() {
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [showManualTimestamps, setShowManualTimestamps] = useState(false);
   const [manualTimestamps, setManualTimestamps] = useState('');
+  
+  // PowerPoint upload and brand conversion state
+  const [uploadedPowerPoint, setUploadedPowerPoint] = useState(null);
+  const [isProcessingPowerPoint, setIsProcessingPowerPoint] = useState(false);
+  const [extractedContent, setExtractedContent] = useState(null);
+  const [applyBranding, setApplyBranding] = useState(true);
+  const [aiEnhancementPrompt, setAiEnhancementPrompt] = useState('');
+  const [showPowerPointPreview, setShowPowerPointPreview] = useState(false);
+  const [showBrandPreview, setShowBrandPreview] = useState(false);
 
   // Initialize slides when count changes
   useEffect(() => {
@@ -3462,6 +3473,118 @@ function SlideBuilderTab() {
   function removeSlideAudio() {
     updateSlide('audioFile', null);
     updateSlide('audioUrl', '');
+  }
+
+  // PowerPoint upload and processing functions
+  async function handlePowerPointUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.pptx') && !file.name.toLowerCase().endsWith('.ppt')) {
+      alert('Please upload a PowerPoint file (.ppt or .pptx)');
+      return;
+    }
+
+    // Validate file size (max 50MB)
+    const maxFileSize = 50 * 1024 * 1024;
+    if (file.size > maxFileSize) {
+      alert(`PowerPoint file is too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum file size is 50MB.`);
+      return;
+    }
+
+    setUploadedPowerPoint(file);
+    setIsProcessingPowerPoint(true);
+    setExtractedContent(null);
+
+    try {
+      const { PowerPointParser } = await import('./utils/powerPointParser.js');
+      const parser = new PowerPointParser();
+      
+      const result = await parser.extractTextFromPPTX(file);
+      const extractedSlides = result.slides || [];
+      
+      if (extractedSlides && extractedSlides.length > 0) {
+        setExtractedContent(extractedSlides);
+        setSlideCount(extractedSlides.length);
+        setShowPowerPointPreview(true);
+      } else {
+        alert('Could not extract content from PowerPoint file. Please try a different file.');
+      }
+    } catch (error) {
+      console.error('PowerPoint processing error:', error);
+      alert('Error processing PowerPoint file. Please try again.');
+    } finally {
+      setIsProcessingPowerPoint(false);
+    }
+  }
+
+  async function applyExtractedContent() {
+    if (!extractedContent) return;
+
+    try {
+      let processedSlides = extractedContent;
+
+      // Apply AI enhancement if prompt is provided
+      if (aiEnhancementPrompt.trim()) {
+        setIsProcessingPowerPoint(true);
+        
+        try {
+          const aiService = getAIService();
+          const enhancedSlides = await aiService.enhanceUploadedContent(
+            extractedContent,
+            aiEnhancementPrompt,
+            { applyBranding, includeInteractive: true }
+          );
+          processedSlides = enhancedSlides;
+        } catch (aiError) {
+          console.error('AI enhancement failed:', aiError);
+          alert('AI enhancement failed. Using original content with branding applied.');
+        } finally {
+          setIsProcessingPowerPoint(false);
+        }
+      }
+
+      // Convert to slide format and apply branding
+      const formattedSlides = processedSlides.map((slide, index) => ({
+        id: index + 1,
+        title: slide.title || `Slide ${index + 1}`,
+        content: slide.content || '',
+        images: [],
+        audioFile: null,
+        audioUrl: '',
+        hyperlinks: [],
+        keyPoints: slide.keyPoints || [],
+        interactiveElements: slide.interactiveElements || [],
+        brandStyling: applyBranding ? {
+          primaryColor: '#0B004A',
+          secondaryColor: '#6C2EB7',
+          lightColor: '#E6E6F2',
+          fontFamily: 'Plus Jakarta Sans, sans-serif'
+        } : null
+      }));
+
+      setSlides(formattedSlides);
+      setSlideCount(formattedSlides.length);
+      setCurrentSlide(0);
+      setShowPowerPointPreview(false);
+      setExtractedContent(null);
+      setUploadedPowerPoint(null);
+      setAiEnhancementPrompt('');
+      
+      alert(`Successfully imported ${formattedSlides.length} slides from PowerPoint!`);
+    } catch (error) {
+      console.error('Error applying extracted content:', error);
+      alert('Error applying PowerPoint content. Please try again.');
+    }
+  }
+
+  function clearPowerPointUpload() {
+    setUploadedPowerPoint(null);
+    setExtractedContent(null);
+    setShowPowerPointPreview(false);
+    setAiEnhancementPrompt('');
+    setIsProcessingPowerPoint(false);
   }
 
   async function processAudioChunks() {
@@ -4652,10 +4775,15 @@ Created with Omnicron - Pearson Education`);
         :root {
             --primary-color: #0B004A;
             --secondary-color: #6C2EB7;
-            --light-bg: #f8f7ff;
+            --light-bg: #E6E6F2;
             --white: #ffffff;
             --text-color: #333;
             --border-color: #E6E6F2;
+            --pearson-light-purple: #faf9ff;
+            --shadow: 0 4px 6px rgba(107, 46, 183, 0.1);
+            --gradient: linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%);
+            --hover-bg: rgba(107, 46, 183, 0.1);
+            --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
         
         * {
@@ -4665,7 +4793,7 @@ Created with Omnicron - Pearson Education`);
         }
         
         body {
-            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            font-family: var(--font-family);
             background: linear-gradient(135deg, var(--light-bg) 0%, var(--white) 100%);
             color: var(--text-color);
             line-height: 1.6;
@@ -5952,6 +6080,227 @@ Created: ${new Date().toLocaleDateString()}
         placeholder="Describe the topic for your slides (e.g., 'Introduction to Machine Learning for beginners, cover basics, algorithms, and applications')"
       />
       
+      {/* PowerPoint upload and brand conversion feature */}
+      <div style={{ marginBottom: '2rem', padding: '1rem', background: '#0B004A', borderRadius: 8, color: 'white' }}>
+        <h4 style={{ marginBottom: '1rem', color: 'white' }}>📄 PowerPoint Upload & Brand Conversion</h4>
+        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', opacity: 0.9 }}>
+          Upload an existing PowerPoint file to extract content and optionally enhance it with AI. 
+          Automatically applies Pearson branding for eLearning content.
+        </p>
+        
+        <div style={{ marginBottom: '1rem' }}>
+          <input
+            type="file"
+            accept=".ppt,.pptx,.PPT,.PPTX"
+            onChange={handlePowerPointUpload}
+            disabled={isProcessingPowerPoint}
+            style={{
+              padding: '0.75rem',
+              borderRadius: 8,
+              border: 'none',
+              background: 'white',
+              width: '100%',
+              fontSize: '1rem',
+              marginBottom: '1rem'
+            }}
+          />
+          
+          {uploadedPowerPoint && (
+            <div style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+              📎 Uploaded: {uploadedPowerPoint.name}
+            </div>
+          )}
+          
+          {isProcessingPowerPoint && (
+            <div style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+              ⏳ Processing PowerPoint file... Extracting content and applying branding.
+            </div>
+          )}
+        </div>
+
+        {/* AI Enhancement Options */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            AI Enhancement (Optional):
+          </label>
+          <textarea
+            value={aiEnhancementPrompt}
+            onChange={(e) => setAiEnhancementPrompt(e.target.value)}
+            placeholder="Describe how you'd like to enhance the PowerPoint content (e.g., 'Make it more interactive for online learning, add reflection questions, improve engagement')"
+            disabled={isProcessingPowerPoint}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              borderRadius: 8,
+              border: 'none',
+              fontSize: '0.9rem',
+              resize: 'vertical',
+              minHeight: '80px'
+            }}
+          />
+        </div>
+
+        {/* Branding Options */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={applyBranding}
+              onChange={(e) => setApplyBranding(e.target.checked)}
+              disabled={isProcessingPowerPoint}
+            />
+            <span style={{ fontSize: '0.9rem' }}>Apply Pearson branding (colors, fonts, styling)</span>
+          </label>
+        </div>
+
+        {/* Action Buttons */}
+        {extractedContent && (
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <button
+              onClick={applyExtractedContent}
+              disabled={isProcessingPowerPoint}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#6C2EB7',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: '1rem',
+                cursor: 'pointer',
+                flex: 1
+              }}
+            >
+              {isProcessingPowerPoint ? 'Processing...' : 'Apply Content to Slides'}
+            </button>
+            <button
+              onClick={() => setShowPowerPointPreview(true)}
+              disabled={isProcessingPowerPoint}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#E6E6F2',
+                color: '#0B004A',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: '1rem',
+                cursor: 'pointer'
+              }}
+            >
+              Preview
+            </button>
+            <button
+              onClick={clearPowerPointUpload}
+              disabled={isProcessingPowerPoint}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'transparent',
+                color: 'white',
+                border: '1px solid white',
+                borderRadius: 8,
+                fontSize: '1rem',
+                cursor: 'pointer'
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* PowerPoint Preview Modal */}
+      {showPowerPointPreview && extractedContent && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '2rem',
+            borderRadius: 12,
+            maxWidth: '80%',
+            maxHeight: '80%',
+            overflow: 'auto'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#0B004A' }}>
+              PowerPoint Content Preview ({extractedContent.length} slides)
+            </h3>
+            
+            <div style={{ marginBottom: '2rem', maxHeight: '400px', overflow: 'auto' }}>
+              {extractedContent.map((slide, index) => (
+                <div key={index} style={{
+                  border: '1px solid #E6E6F2',
+                  borderRadius: 8,
+                  padding: '1rem',
+                  marginBottom: '1rem',
+                  background: applyBranding ? '#faf9ff' : 'white'
+                }}>
+                  <h4 style={{ 
+                    color: applyBranding ? '#0B004A' : '#333',
+                    marginBottom: '0.5rem',
+                    fontFamily: applyBranding ? 'Plus Jakarta Sans, sans-serif' : 'inherit'
+                  }}>
+                    Slide {index + 1}: {slide.title || 'Untitled'}
+                  </h4>
+                  <p style={{ 
+                    color: applyBranding ? '#333' : '#666',
+                    fontSize: '0.9rem',
+                    lineHeight: 1.6
+                  }}>
+                    {slide.content || 'No content'}
+                  </p>
+                  {slide.keyPoints && slide.keyPoints.length > 0 && (
+                    <ul style={{ marginTop: '0.5rem', color: '#666' }}>
+                      {slide.keyPoints.map((point, i) => (
+                        <li key={i} style={{ fontSize: '0.8rem' }}>{point}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowPowerPointPreview(false)}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: '#E6E6F2',
+                  color: '#0B004A',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                Close Preview
+              </button>
+              <button
+                onClick={() => {
+                  setShowPowerPointPreview(false);
+                  applyExtractedContent();
+                }}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: '#6C2EB7',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                Apply to Slides
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Bulk image upload feature */}
       <div style={{ marginBottom: '2rem', padding: '1rem', background: pearsonColors.amethyst, borderRadius: 8, color: 'white' }}>
         <h4 style={{ marginBottom: '1rem', color: 'white' }}>🚀 Quick Start: Create Slides from Images</h4>
@@ -6159,6 +6508,202 @@ Created: ${new Date().toLocaleDateString()}
             }}
           />
         </div>
+
+        {/* Brand Preview Toggle */}
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              type="checkbox"
+              id="brandPreview"
+              checked={showBrandPreview}
+              onChange={(e) => setShowBrandPreview(e.target.checked)}
+              style={{ accentColor: pearsonColors.purple }}
+            />
+            <label htmlFor="brandPreview" style={{ fontWeight: 600, cursor: 'pointer' }}>
+              🎨 Show Brand Preview
+            </label>
+          </div>
+          <div style={{ fontSize: '0.8rem', color: pearsonColors.amethyst, marginBottom: '0.5rem' }}>
+            💡 Preview how this slide will look with Pearson branding applied
+          </div>
+        </div>
+
+        {/* Brand Preview Container */}
+        {showBrandPreview && (
+          <div style={{ 
+            marginBottom: '1rem', 
+            padding: '1.5rem', 
+            background: '#faf9ff', 
+            borderRadius: 12, 
+            border: `2px solid ${pearsonColors.lightPurple}`,
+            boxShadow: '0 4px 6px rgba(107, 46, 183, 0.1)'
+          }}>
+            <h5 style={{ 
+              color: pearsonColors.purple, 
+              marginBottom: '1rem',
+              fontFamily: 'Plus Jakarta Sans, sans-serif',
+              fontSize: '1.1rem',
+              fontWeight: 600
+            }}>
+              🎨 Pearson Brand Preview
+            </h5>
+            
+            <div style={{
+              background: 'white',
+              borderRadius: 8,
+              padding: '1.5rem',
+              border: `1px solid ${pearsonColors.lightPurple}`,
+              boxShadow: '0 2px 4px rgba(11, 0, 74, 0.05)'
+            }}>
+              {/* Slide Title Preview */}
+              <h3 style={{
+                color: pearsonColors.purple,
+                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                fontSize: '1.5rem',
+                fontWeight: 700,
+                marginBottom: '1rem',
+                borderBottom: `2px solid ${pearsonColors.lightPurple}`,
+                paddingBottom: '0.5rem'
+              }}>
+                {currentSlideData.title || `Slide ${currentSlide + 1}`}
+              </h3>
+              
+              {/* Slide Content Preview */}
+              <div style={{
+                color: '#333',
+                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                fontSize: '1rem',
+                lineHeight: 1.6,
+                marginBottom: '1rem'
+              }}>
+                {currentSlideData.content ? (
+                  currentSlideData.content.split('\n').map((paragraph, i) => (
+                    <p key={i} style={{ 
+                      marginBottom: paragraph.trim() ? '1rem' : '0.5rem',
+                      color: '#333'
+                    }}>
+                      {paragraph || '\u00A0'}
+                    </p>
+                  ))
+                ) : (
+                  <p style={{ color: '#999', fontStyle: 'italic' }}>
+                    Enter content above to see branded preview...
+                  </p>
+                )}
+              </div>
+              
+              {/* Interactive Elements Preview */}
+              <div style={{
+                padding: '1rem',
+                background: `linear-gradient(135deg, ${pearsonColors.purple} 0%, ${pearsonColors.amethyst} 100%)`,
+                borderRadius: 8,
+                marginTop: '1rem'
+              }}>
+                <h6 style={{
+                  color: 'white',
+                  fontFamily: 'Plus Jakarta Sans, sans-serif',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  marginBottom: '0.5rem'
+                }}>
+                  📚 Interactive Elements
+                </h6>
+                <div style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  padding: '0.75rem',
+                  borderRadius: 6,
+                  color: 'white',
+                  fontSize: '0.85rem'
+                }}>
+                  <p style={{ margin: 0 }}>
+                    • Think About This: How does this content apply to your work?
+                  </p>
+                  <p style={{ margin: '0.25rem 0 0 0' }}>
+                    • Reflection: What questions do you have about this topic?
+                  </p>
+                </div>
+              </div>
+              
+              {/* Images Preview */}
+              {currentSlideData.images && currentSlideData.images.length > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <h6 style={{
+                    color: pearsonColors.purple,
+                    fontFamily: 'Plus Jakarta Sans, sans-serif',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    marginBottom: '0.5rem'
+                  }}>
+                    📷 Images ({currentSlideData.images.length})
+                  </h6>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                    gap: '0.5rem'
+                  }}>
+                    {currentSlideData.images.slice(0, 3).map((img, index) => (
+                      <div key={index} style={{
+                        background: pearsonColors.lightPurple,
+                        borderRadius: 6,
+                        padding: '0.5rem',
+                        textAlign: 'center',
+                        fontSize: '0.75rem',
+                        color: pearsonColors.purple
+                      }}>
+                        🖼️ {img.name}
+                      </div>
+                    ))}
+                    {currentSlideData.images.length > 3 && (
+                      <div style={{
+                        background: pearsonColors.lightPurple,
+                        borderRadius: 6,
+                        padding: '0.5rem',
+                        textAlign: 'center',
+                        fontSize: '0.75rem',
+                        color: pearsonColors.purple
+                      }}>
+                        +{currentSlideData.images.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Audio Preview */}
+              {currentSlideData.audioFile && (
+                <div style={{ marginTop: '1rem' }}>
+                  <h6 style={{
+                    color: pearsonColors.purple,
+                    fontFamily: 'Plus Jakarta Sans, sans-serif',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    marginBottom: '0.5rem'
+                  }}>
+                    🎵 Audio Content
+                  </h6>
+                  <div style={{
+                    background: pearsonColors.lightPurple,
+                    padding: '0.75rem',
+                    borderRadius: 6,
+                    fontSize: '0.85rem',
+                    color: pearsonColors.purple
+                  }}>
+                    🎧 {currentSlideData.audioFile.name}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div style={{
+              marginTop: '1rem',
+              fontSize: '0.75rem',
+              color: pearsonColors.amethyst,
+              textAlign: 'center'
+            }}>
+              This preview shows how your slide will appear with Pearson branding in the final eLearning output
+            </div>
+          </div>
+        )}
 
                  {/* Image upload */}
          <div style={{ marginBottom: '1rem' }}>
@@ -8903,101 +9448,22 @@ function BrandConverterTab() {
     setIsProcessing(true);
 
     try {
-      // For now, we'll simulate content extraction
-      // In a real implementation, you'd use a library like pptx-parser or send to a backend
-      const mockContent = await simulateContentExtraction(file);
-      setExtractedContent(mockContent);
+      // Extract real content from PowerPoint file
+      const extractedContent = await extractPowerPointContent(file);
+      setExtractedContent(extractedContent);
       
       // Automatically start brand conversion
-      await convertToPearsonBrand(mockContent);
+      await convertToPearsonBrand(extractedContent);
       
     } catch (error) {
       console.error('File processing failed:', error);
-      alert('Failed to process PowerPoint file. Please try again.');
+      alert(`Failed to process PowerPoint file: ${error.message}. Please ensure it's a valid PowerPoint file and try again.`);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Extract content from PowerPoint file
-  const simulateContentExtraction = async (file) => {
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // For demonstration, create realistic sample content that would typically come from a PowerPoint
-    // In a real implementation, this would use a library like mammoth.js or pptx-parser
-    const sampleSlides = [
-      {
-        id: 1,
-        title: "Introduction to Customer Service Excellence",
-        content: "Welcome to our comprehensive training on customer service excellence. Today we'll explore key strategies for delivering exceptional customer experiences that build loyalty and drive business success.",
-        layout: 'title-slide',
-        bullets: []
-      },
-      {
-        id: 2,
-        title: "Core Principles of Customer Service",
-        content: "Effective customer service is built on several fundamental principles that guide every interaction:",
-        layout: 'title-bullets',
-        bullets: [
-          "Listen actively to understand customer needs",
-          "Respond promptly and professionally",
-          "Take ownership of customer issues",
-          "Follow through on commitments",
-          "Exceed expectations whenever possible"
-        ]
-      },
-      {
-        id: 3,
-        title: "Communication Best Practices",
-        content: "Clear, empathetic communication is the foundation of excellent customer service. Use positive language, ask clarifying questions, and always maintain a helpful tone. Remember that non-verbal communication is equally important in face-to-face interactions.",
-        layout: 'title-content',
-        bullets: []
-      },
-      {
-        id: 4,
-        title: "Handling Difficult Situations",
-        content: "When customers are upset or frustrated, it's important to remain calm and professional. Start by acknowledging their concerns and apologizing for any inconvenience. Focus on finding solutions rather than placing blame.",
-        layout: 'two-column',
-        bullets: []
-      },
-      {
-        id: 5,
-        title: "Building Customer Relationships",
-        content: "Long-term customer relationships are built through consistent, reliable service and personal connections. Remember customer preferences, follow up on previous interactions, and always look for opportunities to add value.",
-        layout: 'image-content',
-        bullets: []
-      }
-    ];
-    
-    // Use either sample content or try to extract from actual file name patterns
-    const fileName = file.name.toLowerCase();
-    let slides = sampleSlides;
-    
-    // Basic content customization based on file name
-    if (fileName.includes('training')) {
-      slides[0].title = "Training Program Overview";
-      slides[0].content = "Welcome to this comprehensive training program designed to enhance your skills and knowledge.";
-    } else if (fileName.includes('sales')) {
-      slides[0].title = "Sales Excellence Training";
-      slides[0].content = "Develop the skills needed to excel in sales and build lasting customer relationships.";
-    } else if (fileName.includes('onboarding')) {
-      slides[0].title = "Employee Onboarding Program";
-      slides[0].content = "Welcome to our organization! This program will help you get started and succeed in your new role.";
-    }
-    
-    return {
-      fileName: file.name,
-      slideCount: slides.length,
-      slides: slides.map(slide => ({
-        ...slide,
-        // Combine bullets into content if they exist
-        content: slide.bullets && slide.bullets.length > 0 
-          ? slide.content + '\n\n' + slide.bullets.map(bullet => `• ${bullet}`).join('\n')
-          : slide.content
-      }))
-    };
-  };
+  // This function is no longer needed as we're using real PowerPoint extraction
 
   // Convert to Pearson brand using AI
   const convertToPearsonBrand = async (content) => {
@@ -9563,152 +10029,257 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
     </div>
   );
 
-  // Download single slide as HTML
+  // Download single slide as PowerPoint
   const downloadSingleSlide = async (slide) => {
-    const slideHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${slide.newTitle} - Pearson</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .slide { width: 100vw; height: 100vh; }
-    </style>
-</head>
-<body>
-    <div class="slide">
-        ${document.createElement('div').innerHTML = renderSlideLayout(slide)}
-    </div>
-</body>
-</html>`;
-
-    const blob = new Blob([slideHtml], { type: 'text/html' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${slide.newTitle.replace(/[^a-zA-Z0-9]/g, '_')}_slide.html`;
-    a.click();
+    const pres = new pptxgen();
+    
+    // Set Pearson brand theme
+    pres.defineSlideMaster({
+      title: 'PEARSON_MASTER',
+      background: { color: 'E6E6F2' },
+      objects: [
+        {
+          text: {
+            text: 'Pearson Education',
+            options: {
+              x: '85%',
+              y: '92%',
+              fontSize: 10,
+              color: '666666',
+              fontFace: 'Plus Jakarta Sans'
+            }
+          }
+        }
+      ]
+    });
+    
+    // Create slide based on layout
+    const slideObj = pres.addSlide({ masterName: 'PEARSON_MASTER' });
+    createPowerPointSlide(slideObj, slide);
+    
+    // Download the presentation
+    const fileName = `${getSlideTitle(slide).replace(/[^a-zA-Z0-9]/g, '_')}_slide.pptx`;
+    await pres.writeFile({ fileName });
   };
 
-  // Download converted slides as HTML
-  const downloadBrandedSlides = async () => {
-    const zip = new JSZip();
+  // Create PowerPoint slide based on layout
+  const createPowerPointSlide = (slideObj, slide) => {
+    const layout = slide.layout || 'title-content';
+    const title = getSlideTitle(slide);
+    const content = getSlideContent(slide);
     
-    // Create index.html with all slides
-    const slidesHtml = convertedSlides.map(slide => `
-      <div class="slide" style="
-        background: white;
-        margin: 2rem 0;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(11,0,74,0.1);
-        border-left: 4px solid #6C2EB7;
-      ">
-        <h2 style="
-          color: #0B004A;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 2rem;
-          font-weight: 700;
-          margin-bottom: 1.5rem;
-        ">${slide.newTitle}</h2>
+    switch (layout) {
+      case 'title-slide':
+        // Title slide with gradient background
+        slideObj.background = { color: '0B004A' };
+        slideObj.addText(title, {
+          x: '10%',
+          y: '35%',
+          w: '80%',
+          h: '20%',
+          fontSize: 36,
+          bold: true,
+          color: 'FFFFFF',
+          align: 'center',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        slideObj.addText(content.substring(0, 150) + '...', {
+          x: '10%',
+          y: '55%',
+          w: '80%',
+          h: '15%',
+          fontSize: 18,
+          color: 'FFFFFF',
+          align: 'center',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        break;
         
-        <div style="
-          color: #333;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          line-height: 1.6;
-          font-size: 1.1rem;
-          margin-bottom: 2rem;
-        ">${slide.content}</div>
+      case 'title-bullets':
+        // Title with bullet points
+        slideObj.addText(title, {
+          x: '5%',
+          y: '5%',
+          w: '90%',
+          h: '15%',
+          fontSize: 28,
+          bold: true,
+          color: '0B004A',
+          fontFace: 'Plus Jakarta Sans'
+        });
         
-        <div style="
-          background: linear-gradient(135deg, #f8f7ff 0%, #ffffff 100%);
-          padding: 1rem;
-          border-radius: 8px;
-          border: 1px solid #E6E6F2;
-        ">
-          <h4 style="color: #6C2EB7; margin: 0 0 0.5rem 0;">Brand Elements Applied:</h4>
-          <p style="margin: 0; font-size: 0.9rem; color: #666;">
-            ${slide.brandElements?.layout || 'Modern Pearson layout'}
-          </p>
-        </div>
-      </div>
-    `).join('');
+        // Add bullet points
+        const bullets = content.split('\n').filter(line => line.trim()).slice(0, 6);
+        bullets.forEach((bullet, index) => {
+          const cleanBullet = bullet.trim().replace(/^[•\-\*]\s*/, '');
+          if (cleanBullet) {
+            slideObj.addText(`• ${cleanBullet}`, {
+              x: '5%',
+              y: `${25 + (index * 8)}%`,
+              w: '90%',
+              h: '8%',
+              fontSize: 16,
+              color: '333333',
+              fontFace: 'Plus Jakarta Sans'
+            });
+          }
+        });
+        break;
+        
+      case 'two-column':
+        // Two column layout
+        slideObj.addText(title, {
+          x: '5%',
+          y: '5%',
+          w: '90%',
+          h: '15%',
+          fontSize: 28,
+          bold: true,
+          color: '0B004A',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        
+        const halfContent = Math.floor(content.length / 2);
+        slideObj.addText(content.substring(0, halfContent), {
+          x: '5%',
+          y: '25%',
+          w: '42%',
+          h: '65%',
+          fontSize: 14,
+          color: '333333',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        
+        slideObj.addText(content.substring(halfContent), {
+          x: '53%',
+          y: '25%',
+          w: '42%',
+          h: '65%',
+          fontSize: 14,
+          color: '333333',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        break;
+        
+      case 'image-content':
+        // Image and content layout
+        slideObj.addText(title, {
+          x: '5%',
+          y: '5%',
+          w: '90%',
+          h: '15%',
+          fontSize: 28,
+          bold: true,
+          color: '0B004A',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        
+        slideObj.addText(content, {
+          x: '5%',
+          y: '25%',
+          w: '42%',
+          h: '65%',
+          fontSize: 14,
+          color: '333333',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        
+        // Add image placeholder
+        slideObj.addShape('rect', {
+          x: '53%',
+          y: '25%',
+          w: '42%',
+          h: '65%',
+          fill: { color: '6C2EB7' },
+          line: { color: 'E6E6F2', width: 2 }
+        });
+        
+        slideObj.addText('📸 Image Placeholder\nAdd relevant visual content', {
+          x: '53%',
+          y: '45%',
+          w: '42%',
+          h: '25%',
+          fontSize: 12,
+          color: 'FFFFFF',
+          align: 'center',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        break;
+        
+      default:
+        // Standard title-content layout
+        slideObj.addText(title, {
+          x: '5%',
+          y: '5%',
+          w: '90%',
+          h: '15%',
+          fontSize: 28,
+          bold: true,
+          color: '0B004A',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        
+        slideObj.addText(content, {
+          x: '5%',
+          y: '25%',
+          w: '90%',
+          h: '65%',
+          fontSize: 14,
+          color: '333333',
+          fontFace: 'Plus Jakarta Sans'
+        });
+        break;
+    }
+    
+    // Add Pearson branding line
+    slideObj.addShape('line', {
+      x: '5%',
+      y: '20%',
+      w: '90%',
+      h: 0,
+      line: { color: '6C2EB7', width: 3 }
+    });
+  };
 
-    const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pearson Branded Slides</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background: #E6E6F2;
-            margin: 0;
-            padding: 2rem;
-            color: #0B004A;
+  // Download all converted slides as PowerPoint
+  const downloadBrandedSlides = async () => {
+    const pres = new pptxgen();
+    
+    // Set Pearson brand theme
+    pres.author = 'Pearson Education';
+    pres.company = 'Pearson';
+    pres.title = 'Pearson Branded Presentation';
+    pres.subject = 'Converted PowerPoint with Pearson Branding';
+    
+    // Define slide master with Pearson branding
+    pres.defineSlideMaster({
+      title: 'PEARSON_MASTER',
+      background: { color: 'E6E6F2' },
+      objects: [
+        {
+          text: {
+            text: 'Pearson Education',
+            options: {
+              x: '75%',
+              y: '92%',
+              fontSize: 10,
+              color: '666666',
+              fontFace: 'Plus Jakarta Sans'
+            }
+          }
         }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 3rem;
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(11,0,74,0.1);
-        }
-        .header h1 {
-            color: #0B004A;
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin: 0;
-        }
-        .header p {
-            color: #6C2EB7;
-            font-size: 1.2rem;
-            margin: 0.5rem 0 0 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Pearson Branded Slides</h1>
-            <p>Converted to New Brand Guidelines</p>
-        </div>
-        ${slidesHtml}
-    </div>
-</body>
-</html>`;
-
-    zip.file('index.html', htmlContent);
-    zip.file('README.md', `# Pearson Branded Slides
-
-This package contains your PowerPoint presentation converted to match the new Pearson brand guidelines.
-
-## Brand Elements Applied:
-- Primary Color: #0B004A (Deep Purple)
-- Secondary Color: #6C2EB7 (Amethyst)  
-- Accent Color: #E6E6F2 (Light Purple)
-- Typography: Plus Jakarta Sans
-- Modern, accessible layouts
-
-## Files:
-- index.html: Complete branded presentation
-- README.md: This documentation
-
-Generated by Pearson Brand Converter`);
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'pearson-branded-slides.zip';
-    a.click();
+      ]
+    });
+    
+    // Add all slides
+    convertedSlides.forEach(slide => {
+      const slideObj = pres.addSlide({ masterName: 'PEARSON_MASTER' });
+      createPowerPointSlide(slideObj, slide);
+    });
+    
+    // Download the presentation
+    const fileName = `pearson-branded-slides.pptx`;
+    await pres.writeFile({ fileName });
   };
 
   return (
@@ -9786,7 +10357,7 @@ Generated by Pearson Brand Converter`);
               {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB • Processing content and applying Pearson branding
             </p>
             <p style={{ margin: '0.5rem 0 0 0', color: '#6C2EB7', fontSize: '0.8rem', fontStyle: 'italic' }}>
-              💡 Currently using sample content for demonstration. Full PowerPoint text extraction coming soon!
+              ✅ Extracting actual text content from your PowerPoint file!
             </p>
           </div>
         )}

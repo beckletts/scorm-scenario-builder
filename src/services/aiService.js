@@ -12,28 +12,42 @@ class AIService {
     };
   }
 
-  async generateSlideContent(prompt, slideCount = 5) {
+  async generateSlideContent(prompt, slideCount = 5, options = {}) {
+    const { 
+      applyBranding = true, 
+      includeInteractive = true, 
+      uploadedContent = null,
+      elearningFocus = true 
+    } = options;
+
     try {
+      const systemPrompt = this.buildBrandAwareSlidePrompt(applyBranding, includeInteractive, elearningFocus);
+      const enhancedPrompt = this.enhanceSlidePrompt(prompt, slideCount, uploadedContent, options);
+
       const response = await this.callAPI({
         model: this.getModel(),
         messages: [
-          { role: 'user', content: `Create ${slideCount} slides about: ${prompt}` }
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: enhancedPrompt }
         ],
         temperature: 0.7
       });
 
       // Try to parse JSON first
       try {
-        return JSON.parse(response.content);
+        const parsedSlides = JSON.parse(response.content);
+        return this.applyBrandStyling(parsedSlides, applyBranding);
       } catch (parseError) {
         // If not JSON, convert plain text to slides format
         console.log('Converting plain text response to slides format');
-        return this.convertTextToSlides(response.content, slideCount);
+        const slides = this.convertTextToSlides(response.content, slideCount);
+        return this.applyBrandStyling(slides, applyBranding);
       }
     } catch (error) {
       console.error('AI slide generation failed:', error);
-      // Fallback to basic slides
-      return this.generateFallbackSlides(prompt, slideCount);
+      // Fallback to basic slides with branding
+      const fallbackSlides = this.generateFallbackSlides(prompt, slideCount);
+      return this.applyBrandStyling(fallbackSlides, applyBranding);
     }
   }
 
@@ -100,6 +114,164 @@ class AIService {
     }
     
     return slides;
+  }
+
+  buildBrandAwareSlidePrompt(applyBranding, includeInteractive, elearningFocus) {
+    const brandingGuidelines = applyBranding ? `
+PEARSON BRAND GUIDELINES:
+- Primary Color: #0B004A (Deep Purple)
+- Secondary Color: #6C2EB7 (Medium Purple)
+- Light Color: #E6E6F2 (Light Purple)
+- Typography: Plus Jakarta Sans font family
+- Design: Modern, clean, professional, educational
+- Accessibility: High contrast, readable, inclusive
+- Layout: Clean hierarchy, generous whitespace, rounded corners` : '';
+
+    const interactiveElements = includeInteractive ? `
+INTERACTIVE ELEMENTS:
+- Include engagement prompts and reflection questions
+- Add "Think About This" callout boxes
+- Suggest interactive activities or exercises
+- Include progress indicators and checkpoints
+- Add clickable elements and hover effects` : '';
+
+    const elearningFocusText = elearningFocus ? `
+ELEARNING FOCUS:
+- Structure content for self-paced learning
+- Include clear learning objectives
+- Add knowledge checks and assessments
+- Design for mobile-responsive viewing
+- Include accessibility features
+- Focus on practical application and real-world scenarios` : '';
+
+    return `You are an expert eLearning content creator specializing in slide-based training materials. Create engaging, educational slide content that follows modern instructional design principles.
+
+${brandingGuidelines}${interactiveElements}${elearningFocusText}
+
+SLIDE STRUCTURE:
+Return slides in JSON format with the following structure:
+[
+  {
+    "title": "Slide Title",
+    "content": "Main content text",
+    "keyPoints": ["Key point 1", "Key point 2", "Key point 3"],
+    "interactiveElements": ["Discussion prompt", "Reflection question"],
+    "brandStyling": {
+      "primaryColor": "#0B004A",
+      "secondaryColor": "#6C2EB7",
+      "lightColor": "#E6E6F2"
+    }
+  }
+]
+
+CONTENT REQUIREMENTS:
+- Educational and engaging content
+- Clear, concise language
+- Professional tone appropriate for learners
+- Practical examples and real-world applications
+- Logical progression of concepts
+- Accessibility-friendly descriptions`;
+  }
+
+  enhanceSlidePrompt(prompt, slideCount, uploadedContent, options) {
+    let enhancedPrompt = `Create ${slideCount} educational slides about: ${prompt}`;
+
+    if (uploadedContent && uploadedContent.length > 0) {
+      enhancedPrompt += `\n\nEXISTING CONTENT TO ENHANCE:\n`;
+      uploadedContent.forEach((slide, index) => {
+        enhancedPrompt += `\nSlide ${index + 1}:\nTitle: ${slide.title}\nContent: ${slide.content}\n`;
+      });
+      enhancedPrompt += `\nPlease enhance and expand this content while maintaining the core information. Apply Pearson branding and make it more engaging for eLearning.`;
+    }
+
+    if (options.elearningFocus) {
+      enhancedPrompt += `\n\nELEARNING REQUIREMENTS:
+- Structure for self-paced learning
+- Include clear learning objectives
+- Add knowledge checks and interactive elements
+- Design for mobile-responsive viewing
+- Focus on practical application`;
+    }
+
+    if (options.applyBranding) {
+      enhancedPrompt += `\n\nBRANDING REQUIREMENTS:
+- Apply Pearson visual identity
+- Use professional, educational tone
+- Include accessibility features
+- Modern, clean design approach`;
+    }
+
+    return enhancedPrompt;
+  }
+
+  applyBrandStyling(slides, applyBranding) {
+    if (!applyBranding) return slides;
+
+    return slides.map(slide => ({
+      ...slide,
+      brandStyling: {
+        primaryColor: '#0B004A',
+        secondaryColor: '#6C2EB7',
+        lightColor: '#E6E6F2',
+        fontFamily: 'Plus Jakarta Sans, sans-serif'
+      },
+      // Add interactive elements if not present
+      interactiveElements: slide.interactiveElements || [
+        'What are your thoughts on this topic?',
+        'How might you apply this in your work?'
+      ]
+    }));
+  }
+
+  async enhanceUploadedContent(uploadedContent, enhancementPrompt, options = {}) {
+    const { applyBranding = true, includeInteractive = true } = options;
+
+    try {
+      const systemPrompt = `You are an expert content enhancer specializing in converting existing presentations into engaging eLearning materials. Enhance the provided content while maintaining its core message and structure.
+
+ENHANCEMENT GOALS:
+- Improve readability and engagement
+- Add interactive elements and reflection prompts
+- Apply modern instructional design principles
+- Maintain educational focus
+- Ensure accessibility compliance
+
+${applyBranding ? `
+PEARSON BRAND GUIDELINES:
+- Colors: #0B004A (primary), #6C2EB7 (secondary), #E6E6F2 (light)
+- Typography: Plus Jakarta Sans
+- Design: Modern, clean, professional, educational` : ''}
+
+Return enhanced content in the same JSON slide format.`;
+
+      const contentText = uploadedContent.map((slide, index) => 
+        `Slide ${index + 1}:\nTitle: ${slide.title}\nContent: ${slide.content}\n`
+      ).join('\n');
+
+      const enhancedPrompt = `${enhancementPrompt}\n\nEXISTING CONTENT:\n${contentText}\n\nPlease enhance this content for eLearning while maintaining the original structure and key information.`;
+
+      const response = await this.callAPI({
+        model: this.getModel(),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: enhancedPrompt }
+        ],
+        temperature: 0.6
+      });
+
+      try {
+        const enhancedSlides = JSON.parse(response.content);
+        return this.applyBrandStyling(enhancedSlides, applyBranding);
+      } catch (parseError) {
+        console.log('Converting enhanced content to slides format');
+        const slides = this.convertTextToSlides(response.content, uploadedContent.length);
+        return this.applyBrandStyling(slides, applyBranding);
+      }
+    } catch (error) {
+      console.error('Content enhancement failed:', error);
+      // Return original content with branding applied
+      return this.applyBrandStyling(uploadedContent, applyBranding);
+    }
   }
 
   async generateScenario(prompt, options = {}) {
