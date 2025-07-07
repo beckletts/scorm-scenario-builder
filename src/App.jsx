@@ -8877,6 +8877,18 @@ function BrandConverterTab() {
   const [isRefining, setIsRefining] = useState(false);
   const [showAllSlides, setShowAllSlides] = useState(false);
 
+  // Helper function to safely get slide content as string
+  const getSlideContent = (slide) => {
+    if (!slide || !slide.content) return '';
+    return typeof slide.content === 'string' ? slide.content : String(slide.content);
+  };
+
+  // Helper function to safely get slide title
+  const getSlideTitle = (slide) => {
+    if (!slide) return 'Untitled Slide';
+    return slide.newTitle || slide.title || slide.originalTitle || 'Untitled Slide';
+  };
+
   // PowerPoint file processing
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -9116,12 +9128,12 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
       const slides = parsed.convertedSlides || [];
       
       // Ensure all slides have required properties
-      return slides.map(slide => ({
-        id: slide.id,
-        originalTitle: slide.originalTitle || slide.newTitle,
-        newTitle: slide.newTitle || slide.originalTitle || `Slide ${slide.id}`,
-        layout: slide.layout || 'modern-title-content',
-        content: slide.content || 'Content converted to Pearson brand guidelines',
+      return slides.map((slide, index) => ({
+        id: slide.id || index + 1,
+        originalTitle: slide.originalTitle || slide.newTitle || slide.title || `Slide ${index + 1}`,
+        newTitle: slide.newTitle || slide.title || slide.originalTitle || `Slide ${index + 1}`,
+        layout: slide.layout || 'title-content',
+        content: String(slide.content || 'Content converted to Pearson brand guidelines'),
         brandElements: {
           colors: slide.brandElements?.colors || ['#0B004A', '#6C2EB7'],
           typography: slide.brandElements?.typography || 'Plus Jakarta Sans hierarchy',
@@ -9231,7 +9243,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
         margin: '0 0 1.5rem 0',
         lineHeight: '1.2'
       }}>
-        {slide.newTitle}
+{getSlideTitle(slide)}
       </h1>
       <div style={{
         fontSize: 'clamp(0.9rem, 2vw, 1.2rem)',
@@ -9239,7 +9251,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
         maxWidth: '80%',
         lineHeight: '1.5'
       }}>
-        {slide.content.substring(0, 200)}...
+        {getSlideContent(slide).substring(0, 200)}...
       </div>
       <div style={{
         position: 'absolute',
@@ -9274,7 +9286,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
           margin: '0',
           lineHeight: '1.3'
         }}>
-          {slide.newTitle}
+  {getSlideTitle(slide)}
         </h1>
       </div>
       
@@ -9285,7 +9297,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
         lineHeight: '1.6',
         color: '#333'
       }}>
-        {slide.content}
+        {getSlideContent(slide)}
       </div>
       
       {/* Footer */}
@@ -9325,7 +9337,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
           color: '#0B004A',
           margin: '0'
         }}>
-          {slide.newTitle}
+  {getSlideTitle(slide)}
         </h1>
       </div>
       
@@ -9336,7 +9348,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
         flexDirection: 'column',
         gap: '1rem'
       }}>
-        {slide.content.split('\n').filter(line => line.trim()).slice(0, 6).map((point, index) => {
+        {getSlideContent(slide).split('\n').filter(line => line.trim()).slice(0, 6).map((point, index) => {
           // Handle both bullet points and regular content
           const cleanPoint = point.trim().replace(/^[•\-\*]\s*/, '');
           if (!cleanPoint) return null;
@@ -9404,7 +9416,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
           color: '#0B004A',
           margin: '0'
         }}>
-          {slide.newTitle}
+  {getSlideTitle(slide)}
         </h1>
       </div>
       
@@ -9420,14 +9432,14 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
           lineHeight: '1.6',
           color: '#333'
         }}>
-          {slide.content.substring(0, slide.content.length / 2)}
+          {getSlideContent(slide).substring(0, getSlideContent(slide).length / 2)}
         </div>
         <div style={{
           fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
           lineHeight: '1.6',
           color: '#333'
         }}>
-          {slide.content.substring(slide.content.length / 2)}
+          {getSlideContent(slide).substring(getSlideContent(slide).length / 2)}
         </div>
       </div>
       
@@ -9465,7 +9477,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
         color: '#0B004A',
         maxWidth: '90%'
       }}>
-        {slide.content}
+        {getSlideContent(slide)}
       </div>
       
       {/* Footer */}
@@ -9501,7 +9513,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
           color: '#0B004A',
           margin: '0'
         }}>
-          {slide.newTitle}
+  {getSlideTitle(slide)}
         </h1>
       </div>
       
@@ -9517,7 +9529,7 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
           lineHeight: '1.6',
           color: '#333'
         }}>
-          {slide.content}
+          {getSlideContent(slide)}
         </div>
         <div style={{
           background: 'linear-gradient(135deg, #E6E6F2 0%, #6C2EB7 100%)',
