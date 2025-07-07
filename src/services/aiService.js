@@ -366,7 +366,7 @@ AVOID:
           { role: 'user', content: enhancedPrompt }
         ],
         temperature: 0.4,
-        max_tokens: 2000
+        max_tokens: 4000
       });
 
       return this.postProcessHTML(response.content, contentType, includeBranding);
@@ -385,7 +385,7 @@ AVOID:
               { role: 'user', content: simplifiedPrompt }
             ],
             temperature: 0.3,
-            max_tokens: 1500
+            max_tokens: 4000
           });
           
           return this.postProcessHTML(response.content, contentType, includeBranding);
@@ -443,7 +443,11 @@ TECHNICAL REQUIREMENTS:
 - Interactive JavaScript for user engagement
 - ARIA labels for accessibility
 - Mobile-first approach
-- Include complete HTML structure with DOCTYPE`;
+- Include complete HTML structure with DOCTYPE
+- Generate comprehensive, detailed content with substantial sections
+- Create full-featured implementation with multiple components and interactions
+
+IMPORTANT: Return only the HTML code without any explanatory text, introductions, or descriptions. Start directly with <!DOCTYPE html> and end with </html>.`;
   }
 
   postProcessHTML(html, contentType, includeBranding) {

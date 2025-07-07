@@ -68,7 +68,7 @@ exports.handler = async (event, context) => {
         // Convert OpenAI format to Anthropic format
         const anthropicPayload = {
           model: payload.model || 'claude-3-haiku-20240307', // Fastest model
-          max_tokens: 1000, // Further reduced for speed
+          max_tokens: 4000, // Increased for complete HTML generation
           messages: payload.messages.map(msg => ({
             role: msg.role === 'system' ? 'user' : msg.role,
             content: msg.content
@@ -102,7 +102,7 @@ exports.handler = async (event, context) => {
     console.log(`Making ${provider} API call`);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout for HTML generation
     
     let response;
     try {
