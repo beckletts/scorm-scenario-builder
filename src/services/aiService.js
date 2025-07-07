@@ -352,11 +352,12 @@ AVOID:
     const {
       includeInteractivity = false,
       contentType = 'general',
-      includeBranding = true
+      includeBranding = true,
+      isRefinement = false
     } = options;
 
-    const systemPrompt = this.buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding);
-    const enhancedPrompt = this.enhanceHTMLPrompt(prompt, contentType);
+    const systemPrompt = this.buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding, isRefinement);
+    const enhancedPrompt = isRefinement ? prompt : this.enhanceHTMLPrompt(prompt, contentType);
     
     try {
       const response = await this.callAPI({
@@ -365,7 +366,7 @@ AVOID:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: enhancedPrompt }
         ],
-        temperature: 0.4,
+        temperature: isRefinement ? 0.3 : 0.4,
         max_tokens: 4000
       });
 
@@ -398,8 +399,10 @@ AVOID:
     }
   }
 
-  buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding) {
-    const basePrompt = `Expert HTML developer creating ${contentType} training content for Pearson Education. Generate complete HTML with modern CSS${includeInteractivity ? ' and interactive JavaScript' : ''}.`;
+  buildHTMLSystemPrompt(contentType, includeInteractivity, includeBranding, isRefinement = false) {
+    const basePrompt = isRefinement ? 
+      `Expert HTML developer refining existing ${contentType} training content. Improve the provided HTML based on user feedback while maintaining structure and functionality.` :
+      `Expert HTML developer creating ${contentType} training content for Pearson Education. Generate complete HTML with modern CSS${includeInteractivity ? ' and interactive JavaScript' : ''}.`;
     
     const contentTypePrompts = {
       'quiz': 'Interactive quiz with multiple choice, drag & drop, feedback, and progress tracking.',
