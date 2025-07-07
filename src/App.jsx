@@ -8875,6 +8875,7 @@ function BrandConverterTab() {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [refinementPrompt, setRefinementPrompt] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const [showAllSlides, setShowAllSlides] = useState(false);
 
   // PowerPoint file processing
   const handleFileUpload = async (e) => {
@@ -8978,23 +8979,32 @@ function BrandConverterTab() {
 
   // Create fallback branded slides when AI fails
   const createFallbackBrandedSlides = (content) => {
-    return content.slides.map(slide => ({
-      id: slide.id,
-      originalTitle: slide.title,
-      newTitle: `${slide.title}`,
-      layout: 'modern-title-content',
-      content: slide.content,
-      brandElements: {
-        colors: ['#0B004A', '#6C2EB7'],
-        typography: 'Plus Jakarta Sans hierarchy',
-        layout: 'Modern Pearson layout with consistent spacing'
-      },
-      suggestions: {
-        imagery: 'Professional, diverse, educational imagery',
-        graphics: 'Clean icons and visual elements',
-        improvements: 'Enhanced visual hierarchy and accessibility'
-      }
-    }));
+    return content.slides.map((slide, index) => {
+      // Assign layout based on slide content and position
+      let layout = 'title-content';
+      if (index === 0) layout = 'title-slide';
+      else if (slide.content.includes('\n') || slide.bullets) layout = 'title-bullets';
+      else if (slide.content.length > 300) layout = 'two-column';
+      else if (slide.layout === 'image-content') layout = 'image-content';
+      
+      return {
+        id: slide.id,
+        originalTitle: slide.title,
+        newTitle: slide.title,
+        layout: layout,
+        content: slide.content,
+        brandElements: {
+          colors: ['#0B004A', '#6C2EB7'],
+          typography: 'Plus Jakarta Sans hierarchy',
+          layout: 'Modern Pearson layout with consistent spacing'
+        },
+        suggestions: {
+          imagery: 'Professional, diverse, educational imagery',
+          graphics: 'Clean icons and visual elements',
+          improvements: 'Enhanced visual hierarchy and accessibility'
+        }
+      };
+    });
   };
 
   // Build brand conversion prompt
@@ -9021,6 +9031,7 @@ Return JSON with this structure:
     {
       "id": 1,
       "newTitle": "Improved title",
+      "layout": "title-content",
       "content": "Branded content",
       "brandElements": {
         "colors": ["#0B004A", "#6C2EB7"],
@@ -9028,7 +9039,9 @@ Return JSON with this structure:
       }
     }
   ]
-}`;
+}
+
+Available layouts: title-slide, title-content, title-bullets, two-column, image-content, full-content`;
   };
 
   // Parse AI response into structured slides
@@ -9113,6 +9126,389 @@ Return JSON with this structure:
     } finally {
       setIsRefining(false);
     }
+  };
+
+  // Render visual slide layouts
+  const renderSlideLayout = (slide) => {
+    const layout = slide.layout || 'title-content';
+    
+    switch (layout) {
+      case 'title-slide':
+        return renderTitleSlide(slide);
+      case 'title-content':
+        return renderTitleContentSlide(slide);
+      case 'title-bullets':
+        return renderTitleBulletsSlide(slide);
+      case 'two-column':
+        return renderTwoColumnSlide(slide);
+      case 'full-content':
+        return renderFullContentSlide(slide);
+      case 'image-content':
+        return renderImageContentSlide(slide);
+      default:
+        return renderTitleContentSlide(slide);
+    }
+  };
+
+  // Title slide layout
+  const renderTitleSlide = (slide) => (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      textAlign: 'center',
+      padding: '3rem',
+      background: 'linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%)',
+      color: 'white'
+    }}>
+      <h1 style={{
+        fontSize: 'clamp(1.5rem, 4vw, 3rem)',
+        fontWeight: '700',
+        margin: '0 0 1.5rem 0',
+        lineHeight: '1.2'
+      }}>
+        {slide.newTitle}
+      </h1>
+      <div style={{
+        fontSize: 'clamp(0.9rem, 2vw, 1.2rem)',
+        opacity: '0.9',
+        maxWidth: '80%',
+        lineHeight: '1.5'
+      }}>
+        {slide.content.substring(0, 200)}...
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: '2rem',
+        right: '2rem',
+        fontSize: '0.8rem',
+        opacity: '0.7'
+      }}>
+        Pearson Education
+      </div>
+    </div>
+  );
+
+  // Title and content layout
+  const renderTitleContentSlide = (slide) => (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '2rem'
+    }}>
+      {/* Header */}
+      <div style={{
+        borderBottom: '3px solid #6C2EB7',
+        paddingBottom: '1rem',
+        marginBottom: '2rem'
+      }}>
+        <h1 style={{
+          fontSize: 'clamp(1.2rem, 3vw, 2rem)',
+          fontWeight: '700',
+          color: '#0B004A',
+          margin: '0',
+          lineHeight: '1.3'
+        }}>
+          {slide.newTitle}
+        </h1>
+      </div>
+      
+      {/* Content */}
+      <div style={{
+        flex: '1',
+        fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
+        lineHeight: '1.6',
+        color: '#333'
+      }}>
+        {slide.content}
+      </div>
+      
+      {/* Footer */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: '1rem',
+        paddingTop: '1rem',
+        borderTop: '1px solid #E6E6F2',
+        fontSize: '0.7rem',
+        color: '#666'
+      }}>
+        <span>Pearson Education</span>
+        <span>Slide {slide.id}</span>
+      </div>
+    </div>
+  );
+
+  // Title and bullets layout
+  const renderTitleBulletsSlide = (slide) => (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '2rem'
+    }}>
+      {/* Header */}
+      <div style={{
+        borderBottom: '3px solid #6C2EB7',
+        paddingBottom: '1rem',
+        marginBottom: '2rem'
+      }}>
+        <h1 style={{
+          fontSize: 'clamp(1.2rem, 3vw, 2rem)',
+          fontWeight: '700',
+          color: '#0B004A',
+          margin: '0'
+        }}>
+          {slide.newTitle}
+        </h1>
+      </div>
+      
+      {/* Bullet Points */}
+      <div style={{
+        flex: '1',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem'
+      }}>
+        {slide.content.split('\n').filter(line => line.trim()).slice(0, 5).map((point, index) => (
+          <div key={index} style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '1rem'
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: '#6C2EB7',
+              marginTop: '0.6rem',
+              flexShrink: '0'
+            }} />
+            <div style={{
+              fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
+              lineHeight: '1.5',
+              color: '#333'
+            }}>
+              {point.trim()}
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* Footer */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: '1rem',
+        paddingTop: '1rem',
+        borderTop: '1px solid #E6E6F2',
+        fontSize: '0.7rem',
+        color: '#666'
+      }}>
+        <span>Pearson Education</span>
+        <span>Slide {slide.id}</span>
+      </div>
+    </div>
+  );
+
+  // Two column layout
+  const renderTwoColumnSlide = (slide) => (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '2rem'
+    }}>
+      {/* Header */}
+      <div style={{
+        borderBottom: '3px solid #6C2EB7',
+        paddingBottom: '1rem',
+        marginBottom: '2rem'
+      }}>
+        <h1 style={{
+          fontSize: 'clamp(1.2rem, 3vw, 2rem)',
+          fontWeight: '700',
+          color: '#0B004A',
+          margin: '0'
+        }}>
+          {slide.newTitle}
+        </h1>
+      </div>
+      
+      {/* Two Columns */}
+      <div style={{
+        flex: '1',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '2rem'
+      }}>
+        <div style={{
+          fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
+          lineHeight: '1.6',
+          color: '#333'
+        }}>
+          {slide.content.substring(0, slide.content.length / 2)}
+        </div>
+        <div style={{
+          fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
+          lineHeight: '1.6',
+          color: '#333'
+        }}>
+          {slide.content.substring(slide.content.length / 2)}
+        </div>
+      </div>
+      
+      {/* Footer */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: '1rem',
+        paddingTop: '1rem',
+        borderTop: '1px solid #E6E6F2',
+        fontSize: '0.7rem',
+        color: '#666'
+      }}>
+        <span>Pearson Education</span>
+        <span>Slide {slide.id}</span>
+      </div>
+    </div>
+  );
+
+  // Full content layout
+  const renderFullContentSlide = (slide) => (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      textAlign: 'center',
+      padding: '3rem'
+    }}>
+      <div style={{
+        fontSize: 'clamp(1rem, 2vw, 1.5rem)',
+        lineHeight: '1.6',
+        color: '#0B004A',
+        maxWidth: '90%'
+      }}>
+        {slide.content}
+      </div>
+      
+      {/* Footer */}
+      <div style={{
+        position: 'absolute',
+        bottom: '1rem',
+        right: '2rem',
+        fontSize: '0.7rem',
+        color: '#666'
+      }}>
+        Pearson Education • Slide {slide.id}
+      </div>
+    </div>
+  );
+
+  // Image and content layout
+  const renderImageContentSlide = (slide) => (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '2rem'
+    }}>
+      {/* Header */}
+      <div style={{
+        borderBottom: '3px solid #6C2EB7',
+        paddingBottom: '1rem',
+        marginBottom: '2rem'
+      }}>
+        <h1 style={{
+          fontSize: 'clamp(1.2rem, 3vw, 2rem)',
+          fontWeight: '700',
+          color: '#0B004A',
+          margin: '0'
+        }}>
+          {slide.newTitle}
+        </h1>
+      </div>
+      
+      {/* Content with image placeholder */}
+      <div style={{
+        flex: '1',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '2rem'
+      }}>
+        <div style={{
+          fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
+          lineHeight: '1.6',
+          color: '#333'
+        }}>
+          {slide.content}
+        </div>
+        <div style={{
+          background: 'linear-gradient(135deg, #E6E6F2 0%, #6C2EB7 100%)',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontSize: '0.8rem',
+          textAlign: 'center'
+        }}>
+          📸 Image Placeholder<br/>
+          <small>Add relevant visual content</small>
+        </div>
+      </div>
+      
+      {/* Footer */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: '1rem',
+        paddingTop: '1rem',
+        borderTop: '1px solid #E6E6F2',
+        fontSize: '0.7rem',
+        color: '#666'
+      }}>
+        <span>Pearson Education</span>
+        <span>Slide {slide.id}</span>
+      </div>
+    </div>
+  );
+
+  // Download single slide as HTML
+  const downloadSingleSlide = async (slide) => {
+    const slideHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${slide.newTitle} - Pearson</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .slide { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div class="slide">
+        ${document.createElement('div').innerHTML = renderSlideLayout(slide)}
+    </div>
+</body>
+</html>`;
+
+    const blob = new Blob([slideHtml], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${slide.newTitle.replace(/[^a-zA-Z0-9]/g, '_')}_slide.html`;
+    a.click();
   };
 
   // Download converted slides as HTML
@@ -9393,42 +9789,83 @@ Generated by Pearson Brand Converter`);
               </button>
             </div>
 
-            {/* Slides Preview */}
+            {/* Visual Slides Preview */}
             <div style={{
-              maxHeight: '400px',
+              maxHeight: '600px',
               overflowY: 'auto',
               display: 'grid',
-              gap: '1rem'
+              gap: '2rem'
             }}>
               {convertedSlides.slice(0, 3).map(slide => (
-                <div key={slide.id} style={{
-                  background: 'white',
-                  padding: '1.5rem',
-                  borderRadius: '8px',
-                  border: '1px solid #e6e6f2',
-                  borderLeft: '4px solid #6C2EB7'
-                }}>
-                  <h4 style={{
-                    color: '#0B004A',
-                    margin: '0 0 1rem 0',
-                    fontWeight: '700'
-                  }}>
-                    {slide.newTitle}
-                  </h4>
-                  <p style={{
-                    color: '#333',
-                    margin: '0 0 1rem 0',
-                    lineHeight: '1.5'
-                  }}>
-                    {slide.content.substring(0, 150)}...
-                  </p>
+                <div key={slide.id}>
+                  {/* Slide Preview */}
                   <div style={{
-                    fontSize: '12px',
-                    color: '#6C2EB7',
-                    fontWeight: '600'
+                    background: 'white',
+                    borderRadius: '8px',
+                    border: '2px solid #e6e6f2',
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 12px rgba(11,0,74,0.1)'
                   }}>
-                    Brand: {slide.brandElements?.typography || 'Plus Jakarta Sans'} • 
-                    Colors: {slide.brandElements?.colors?.join(', ') || '#0B004A, #6C2EB7'}
+                    {/* Visual Slide */}
+                    <div style={{
+                      width: '100%',
+                      aspectRatio: '16/9',
+                      background: 'linear-gradient(135deg, #E6E6F2 0%, #ffffff 100%)',
+                      position: 'relative',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      fontFamily: 'Plus Jakarta Sans, sans-serif'
+                    }}>
+                      {renderSlideLayout(slide)}
+                    </div>
+                    
+                    {/* Slide Info */}
+                    <div style={{
+                      padding: '1rem',
+                      borderTop: '1px solid #e6e6f2',
+                      background: '#fafafa'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '0.5rem'
+                      }}>
+                        <h4 style={{
+                          color: '#0B004A',
+                          margin: '0',
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          Slide {slide.id}: {slide.newTitle}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => downloadSingleSlide(slide)}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: '#6C2EB7',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          Download
+                        </button>
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#666',
+                        display: 'flex',
+                        gap: '1rem'
+                      }}>
+                        <span>Layout: {slide.layout}</span>
+                        <span>Brand: Pearson {new Date().getFullYear()}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -9437,9 +9874,28 @@ Generated by Pearson Brand Converter`);
                   textAlign: 'center',
                   color: '#666',
                   fontStyle: 'italic',
-                  padding: '1rem'
+                  padding: '2rem',
+                  background: 'white',
+                  borderRadius: '8px',
+                  border: '1px dashed #ddd'
                 }}>
-                  ... and {convertedSlides.length - 3} more slides
+                  <p style={{ margin: '0 0 1rem 0' }}>... and {convertedSlides.length - 3} more slides</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSlides(true)}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#6C2EB7',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    View All Slides
+                  </button>
                 </div>
               )}
             </div>
