@@ -451,11 +451,29 @@ IMPORTANT: Return only the HTML code without any explanatory text, introductions
   }
 
   postProcessHTML(html, contentType, includeBranding) {
-    if (!includeBranding) {
-      return html;
-    }
-
     let processedHTML = html;
+
+    // Remove any markdown formatting that might have slipped through
+    processedHTML = processedHTML.replace(/```html/g, '').replace(/```/g, '');
+    processedHTML = processedHTML.replace(/```/g, '');
+    
+    // Remove any conversational text at the beginning or end
+    processedHTML = processedHTML.replace(/^[^<]*(?=<!DOCTYPE|<html)/i, '');
+    processedHTML = processedHTML.replace(/<\/html>[\s\S]*$/i, '</html>');
+    
+    // Remove common conversational phrases that might appear
+    processedHTML = processedHTML.replace(/^(Here's|Here is|This is|I've created|I'll create|Below is).*?(?=<!DOCTYPE|<html)/is, '');
+    processedHTML = processedHTML.replace(/^.*?(?=<!DOCTYPE html|<html)/is, '');
+    
+    // Remove any text after the closing html tag
+    processedHTML = processedHTML.replace(/(<\/html>)[\s\S]*$/i, '$1');
+    
+    // Clean up any remaining whitespace
+    processedHTML = processedHTML.trim();
+
+    if (!includeBranding) {
+      return processedHTML;
+    }
 
     // Add Pearson font if not included
     if (!processedHTML.includes('Plus Jakarta Sans') && !processedHTML.includes('fonts.googleapis.com')) {
