@@ -102,22 +102,28 @@ class AIService {
     return slides;
   }
 
-  async generateScenario(prompt) {
+  async generateScenario(prompt, options = {}) {
+    const { requestCount = 5, isRefinement = false } = options;
+    
     try {
-      const scenarioPrompt = this.buildScenarioPrompt(prompt);
+      const scenarioPrompt = this.buildScenarioPrompt(prompt, requestCount, isRefinement);
+      const systemPrompt = isRefinement ? 
+        'You are a training scenario generator refining existing scenarios. Generate exactly 5 improved training scenarios in valid JSON format based on the provided context and refinement request.' :
+        'You are a training scenario generator for Pearson customer service and educational staff. Generate exactly 5 valid training scenarios in the exact JSON format requested. Do not include explanations, examples, or template text.';
+        
       const response = await this.callAPI({
         model: this.getModel(),
         messages: [
-          { role: 'system', content: 'You are a training scenario generator for Pearson customer service and educational staff. Generate only valid training scenarios in the exact JSON format requested. Do not include explanations, examples, or template text.' },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: scenarioPrompt }
         ],
-        temperature: 0.7
+        temperature: isRefinement ? 0.6 : 0.7
       });
 
       // Enhanced validation
       if (this.isInvalidResponse(response.content)) {
         console.log('Invalid AI response detected, using fallback');
-        return this.generateFallbackScenario(prompt);
+        return this.generateFallbackScenario(prompt, requestCount);
       }
 
       // Try to parse JSON first
@@ -139,14 +145,17 @@ class AIService {
     }
   }
 
-  buildScenarioPrompt(prompt) {
-    return `Generate 2-3 training scenarios for: ${prompt}
+  buildScenarioPrompt(prompt, requestCount = 5, isRefinement = false) {
+    const action = isRefinement ? 'Refine and improve the scenarios based on' : 'Generate exactly 5 training scenarios for';
+    
+    return `${action}: ${prompt}
 
 REQUIREMENTS:
 - Each scenario must be a realistic, specific situation requiring problem-solving
 - Focus on customer service, educational, or professional training contexts
 - Include challenging but realistic situations staff might encounter
 - Provide enough detail for meaningful analysis and response
+- Generate exactly ${requestCount} unique scenarios
 
 STRICT JSON FORMAT (respond with ONLY this JSON, no other text):
 [
@@ -159,6 +168,21 @@ STRICT JSON FORMAT (respond with ONLY this JSON, no other text):
     "id": 2,
     "title": "Another specific scenario title",
     "description": "Another detailed scenario description presenting a different challenging situation requiring problem-solving skills."
+  },
+  {
+    "id": 3,
+    "title": "Third specific scenario title",
+    "description": "Third detailed scenario description with different context and challenges."
+  },
+  {
+    "id": 4,
+    "title": "Fourth specific scenario title",
+    "description": "Fourth detailed scenario description exploring different aspects of the topic."
+  },
+  {
+    "id": 5,
+    "title": "Fifth specific scenario title",
+    "description": "Fifth detailed scenario description providing comprehensive coverage of different situations."
   }
 ]
 
@@ -323,13 +347,13 @@ AVOID:
     return scenarios.slice(0, 4); // Limit to 4 scenarios max for better UX
   }
 
-  generateFallbackScenario(prompt) {
+  generateFallbackScenario(prompt, requestCount = 5) {
     const topic = prompt.toLowerCase().includes('customer') ? 'Customer Service' : 
                   prompt.toLowerCase().includes('safety') ? 'Safety Training' :
                   prompt.toLowerCase().includes('sales') ? 'Sales Training' : 
                   prompt.toLowerCase().includes('exam') ? 'Exam Administration' : 'Training';
     
-    return [
+    const scenarios = [
       {
         id: 1,
         title: `${topic} Challenge`,
@@ -344,8 +368,20 @@ AVOID:
         id: 3,
         title: `${topic} Communication`,
         description: `You must communicate difficult or complex information related to ${topic.toLowerCase()} to someone who may not be familiar with the procedures or policies. Describe how you would structure your communication, what key points you would emphasize, and how you would ensure understanding.`
+      },
+      {
+        id: 4,
+        title: `${topic} Problem Resolution`,
+        description: `A complex problem has arisen in ${topic.toLowerCase()} that affects multiple people or departments. You need to identify the root cause, develop a solution, and implement it while managing stakeholder expectations. Describe your approach to problem-solving and how you would ensure the solution is effective.`
+      },
+      {
+        id: 5,
+        title: `${topic} Ethical Dilemma`,
+        description: `You face an ethical dilemma related to ${topic.toLowerCase()} where different courses of action have various benefits and drawbacks. Competing interests and values must be balanced. Explain how you would analyze the ethical implications and arrive at a decision that upholds professional standards.`
       }
     ];
+    
+    return scenarios.slice(0, requestCount);
   }
 
   async generateHTML(prompt, options = {}) {

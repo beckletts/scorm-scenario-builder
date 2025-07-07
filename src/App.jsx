@@ -1023,6 +1023,9 @@ function ScenarioTab() {
   const [error, setError] = useState('');
   const [reviewScenarios, setReviewScenarios] = useState([]);
   const [showReview, setShowReview] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [refinementPrompt, setRefinementPrompt] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
 
   function handlePreview() {
     try {
@@ -1062,7 +1065,7 @@ function ScenarioTab() {
 
     try {
       const aiService = getAIService();
-      const scenarioData = await aiService.generateScenario(prompt);
+      const scenarioData = await aiService.generateScenario(prompt, { requestCount: 5 });
       
       // Handle both single scenario and array of scenarios
       let scenariosArray;
@@ -1083,6 +1086,15 @@ function ScenarioTab() {
         originalDescription: scenario.description
       }));
       
+      // Add to conversation history
+      const historyEntry = {
+        id: Date.now(),
+        prompt,
+        scenarios: reviewableScenarios,
+        timestamp: new Date().toISOString()
+      };
+      setConversationHistory(prev => [...prev, historyEntry]);
+      
       // Show review interface instead of directly setting scenarios
       setReviewScenarios(reviewableScenarios);
       setShowReview(true);
@@ -1091,6 +1103,80 @@ function ScenarioTab() {
     } catch (error) {
       console.error('AI scenario generation failed:', error);
       throw error;
+    }
+  };
+
+  // Handle refinement of existing scenarios
+  const handleScenarioRefinement = async (refinementPrompt) => {
+    if (!window.aiConfig?.apiKey && window.aiConfig?.provider !== 'ollama') {
+      throw new Error('AI service not configured. Please set up your API key.');
+    }
+
+    if (!refinementPrompt.trim()) {
+      throw new Error('Please enter a refinement request.');
+    }
+
+    setIsRefining(true);
+    try {
+      const aiService = getAIService();
+      
+      // Build context from conversation history
+      const context = conversationHistory.slice(-2).map(entry => 
+        `Previous request: ${entry.prompt}\nGenerated scenarios: ${entry.scenarios.map(s => `"${s.title}"`).join(', ')}`
+      ).join('\n\n');
+      
+      const currentScenarios = reviewScenarios.map(s => `"${s.title}": ${s.description}`).join('\n');
+      
+      const contextualPrompt = context ? 
+        `Context from previous generations:\n${context}\n\nCurrent scenarios:\n${currentScenarios}\n\nRefinement request: ${refinementPrompt}` :
+        `Current scenarios:\n${currentScenarios}\n\nRefinement request: ${refinementPrompt}`;
+      
+      const refinedScenarios = await aiService.generateScenario(contextualPrompt, { 
+        requestCount: 5,
+        isRefinement: true
+      });
+      
+      // Handle response format
+      let scenariosArray;
+      if (Array.isArray(refinedScenarios)) {
+        scenariosArray = refinedScenarios;
+      } else if (refinedScenarios.scenarios && Array.isArray(refinedScenarios.scenarios)) {
+        scenariosArray = refinedScenarios.scenarios;
+      } else {
+        scenariosArray = [refinedScenarios];
+      }
+      
+      // Add enabled flag to each scenario for review interface
+      const reviewableScenarios = scenariosArray.map(scenario => ({
+        ...scenario,
+        enabled: true,
+        originalTitle: scenario.title,
+        originalDescription: scenario.description
+      }));
+      
+      // Add refinement to conversation history
+      const historyEntry = {
+        id: Date.now(),
+        prompt: refinementPrompt,
+        scenarios: reviewableScenarios,
+        timestamp: new Date().toISOString(),
+        isRefinement: true,
+        previousScenarios: reviewScenarios
+      };
+      setConversationHistory(prev => [...prev, historyEntry]);
+      
+      // Update review scenarios
+      setReviewScenarios(reviewableScenarios);
+      setShowReview(true);
+      
+      // Clear refinement prompt
+      setRefinementPrompt('');
+      
+    } catch (error) {
+      console.error('Scenario refinement failed:', error);
+      throw error;
+    } finally {
+      setIsRefining(false);
     }
   };
 
@@ -2160,6 +2246,225 @@ Total Scenarios: ${scenarios.length}
         isConfigured={!!(window.aiConfig?.apiKey || window.aiConfig?.provider === 'ollama')}
         placeholder="Describe the scenario you want to create (e.g., 'Customer service training for handling difficult customers, include multiple decision points and realistic dialogue')"
       />
+
+      {/* Scenario Refinement Interface */}
+      {(reviewScenarios.length > 0 || conversationHistory.length > 0) && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fff7e6 0%, #ffffff 100%)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          border: '2px solid #f0e6ff'
+        }}>
+          <h3 style={{
+            color: pearsonColors.purple,
+            marginBottom: '1rem',
+            fontSize: '1.1rem',
+            fontWeight: '600'
+          }}>
+            🎨 Refine Your Scenarios
+          </h3>
+          
+          <div style={{ marginBottom: '1rem' }}>
+            <textarea
+              value={refinementPrompt}
+              onChange={(e) => setRefinementPrompt(e.target.value)}
+              placeholder="Describe how you want to improve the scenarios (e.g., 'Add more complex decision points', 'Include workplace diversity scenarios', 'Make them more challenging')"
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: '12px',
+                border: '2px solid #e6e6f2',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                resize: 'vertical',
+                backgroundColor: 'white'
+              }}
+            />
+          </div>
+          
+          <div style={{
+            display: 'flex',
+            gap: '1rem',
+            flexWrap: 'wrap',
+            alignItems: 'center'
+          }}>
+            <button
+              type="button"
+              onClick={() => handleScenarioRefinement(refinementPrompt)}
+              disabled={isRefining || !refinementPrompt.trim()}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: isRefining ? '#cccccc' : pearsonColors.amethyst,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isRefining ? 'not-allowed' : 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+                fontFamily: 'Plus Jakarta Sans, sans-serif'
+              }}
+            >
+              {isRefining ? '🔄 Refining...' : '✨ Refine Scenarios'}
+            </button>
+            
+            {/* Quick action buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              flexWrap: 'wrap'
+            }}>
+              {[
+                { label: 'Add Complexity', prompt: 'Make the scenarios more complex with additional decision points and challenging situations' },
+                { label: 'More Realistic', prompt: 'Make the scenarios more realistic with authentic workplace situations and dialogue' },
+                { label: 'Different Industries', prompt: 'Create scenarios for different industries and workplace contexts' },
+                { label: 'Add Diversity', prompt: 'Include more diverse characters and inclusive workplace scenarios' },
+                { label: 'Ethical Dilemmas', prompt: 'Add ethical dilemmas and moral decision-making challenges' }
+              ].map(action => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => {
+                    setRefinementPrompt(action.prompt);
+                    handleScenarioRefinement(action.prompt);
+                  }}
+                  disabled={isRefining}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: 'white',
+                    color: pearsonColors.purple,
+                    border: `1px solid ${pearsonColors.purple}`,
+                    borderRadius: '20px',
+                    cursor: isRefining ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    fontFamily: 'Plus Jakarta Sans, sans-serif',
+                    opacity: isRefining ? 0.5 : 1
+                  }}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conversation History */}
+      {conversationHistory.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, #f0f8ff 0%, #ffffff 100%)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          border: '2px solid #e6f3ff'
+        }}>
+          <h3 style={{
+            color: pearsonColors.purple,
+            marginBottom: '1rem',
+            fontSize: '1.1rem',
+            fontWeight: '600'
+          }}>
+            📝 Generation History
+          </h3>
+          
+          <div style={{
+            maxHeight: '300px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
+            {conversationHistory.slice().reverse().map((entry, index) => (
+              <div key={entry.id} style={{
+                background: 'white',
+                padding: '1rem',
+                borderRadius: '8px',
+                border: '1px solid #e6e6f2',
+                position: 'relative'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '0.5rem'
+                }}>
+                  <span style={{
+                    fontSize: '12px',
+                    color: '#666',
+                    fontWeight: '500'
+                  }}>
+                    {entry.isRefinement ? '🎨 Refinement' : '✨ Initial Generation'} • {new Date(entry.timestamp).toLocaleTimeString()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewScenarios(entry.scenarios);
+                      setShowReview(true);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      backgroundColor: pearsonColors.amethyst,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Restore
+                  </button>
+                </div>
+                
+                <div style={{
+                  fontSize: '14px',
+                  color: '#333',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500'
+                }}>
+                  "{entry.prompt}"
+                </div>
+                
+                <div style={{
+                  fontSize: '12px',
+                  color: '#666',
+                  backgroundColor: '#f8f9fa',
+                  padding: '0.5rem',
+                  borderRadius: '4px'
+                }}>
+                  Generated {entry.scenarios.length} scenarios: {entry.scenarios.map(s => `"${s.title}"`).join(', ').substring(0, 100)}...
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {conversationHistory.length > 3 && (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '1rem'
+            }}>
+              <button
+                type="button"
+                onClick={() => setConversationHistory([])}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: 'white',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}
+              >
+                Clear History
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       
       <label htmlFor="scenario-json" style={{ fontWeight: 600 }}>Paste Scenario JSON:</label>
       <textarea
