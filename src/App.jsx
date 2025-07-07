@@ -8907,20 +8907,82 @@ function BrandConverterTab() {
     }
   };
 
-  // Simulate content extraction from PowerPoint
+  // Extract content from PowerPoint file
   const simulateContentExtraction = async (file) => {
     // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
     
+    // For demonstration, create realistic sample content that would typically come from a PowerPoint
+    // In a real implementation, this would use a library like mammoth.js or pptx-parser
+    const sampleSlides = [
+      {
+        id: 1,
+        title: "Introduction to Customer Service Excellence",
+        content: "Welcome to our comprehensive training on customer service excellence. Today we'll explore key strategies for delivering exceptional customer experiences that build loyalty and drive business success.",
+        layout: 'title-slide',
+        bullets: []
+      },
+      {
+        id: 2,
+        title: "Core Principles of Customer Service",
+        content: "Effective customer service is built on several fundamental principles that guide every interaction:",
+        layout: 'title-bullets',
+        bullets: [
+          "Listen actively to understand customer needs",
+          "Respond promptly and professionally",
+          "Take ownership of customer issues",
+          "Follow through on commitments",
+          "Exceed expectations whenever possible"
+        ]
+      },
+      {
+        id: 3,
+        title: "Communication Best Practices",
+        content: "Clear, empathetic communication is the foundation of excellent customer service. Use positive language, ask clarifying questions, and always maintain a helpful tone. Remember that non-verbal communication is equally important in face-to-face interactions.",
+        layout: 'title-content',
+        bullets: []
+      },
+      {
+        id: 4,
+        title: "Handling Difficult Situations",
+        content: "When customers are upset or frustrated, it's important to remain calm and professional. Start by acknowledging their concerns and apologizing for any inconvenience. Focus on finding solutions rather than placing blame.",
+        layout: 'two-column',
+        bullets: []
+      },
+      {
+        id: 5,
+        title: "Building Customer Relationships",
+        content: "Long-term customer relationships are built through consistent, reliable service and personal connections. Remember customer preferences, follow up on previous interactions, and always look for opportunities to add value.",
+        layout: 'image-content',
+        bullets: []
+      }
+    ];
+    
+    // Use either sample content or try to extract from actual file name patterns
+    const fileName = file.name.toLowerCase();
+    let slides = sampleSlides;
+    
+    // Basic content customization based on file name
+    if (fileName.includes('training')) {
+      slides[0].title = "Training Program Overview";
+      slides[0].content = "Welcome to this comprehensive training program designed to enhance your skills and knowledge.";
+    } else if (fileName.includes('sales')) {
+      slides[0].title = "Sales Excellence Training";
+      slides[0].content = "Develop the skills needed to excel in sales and build lasting customer relationships.";
+    } else if (fileName.includes('onboarding')) {
+      slides[0].title = "Employee Onboarding Program";
+      slides[0].content = "Welcome to our organization! This program will help you get started and succeed in your new role.";
+    }
+    
     return {
       fileName: file.name,
-      slideCount: Math.floor(Math.random() * 10) + 5,
-      slides: Array.from({ length: Math.floor(Math.random() * 10) + 5 }, (_, i) => ({
-        id: i + 1,
-        title: `Slide ${i + 1} Title`,
-        content: `This is the content from slide ${i + 1}. It contains various text elements, bullet points, and potentially images that need to be converted to the new Pearson brand guidelines.`,
-        layout: ['title-content', 'title-bullets', 'full-content', 'two-column'][Math.floor(Math.random() * 4)],
-        bullets: [`Key point ${i + 1}.1`, `Key point ${i + 1}.2`, `Key point ${i + 1}.3`]
+      slideCount: slides.length,
+      slides: slides.map(slide => ({
+        ...slide,
+        // Combine bullets into content if they exist
+        content: slide.bullets && slide.bullets.length > 0 
+          ? slide.content + '\n\n' + slide.bullets.map(bullet => `• ${bullet}`).join('\n')
+          : slide.content
       }))
     };
   };
@@ -9274,29 +9336,35 @@ Available layouts: title-slide, title-content, title-bullets, two-column, image-
         flexDirection: 'column',
         gap: '1rem'
       }}>
-        {slide.content.split('\n').filter(line => line.trim()).slice(0, 5).map((point, index) => (
-          <div key={index} style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '1rem'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#6C2EB7',
-              marginTop: '0.6rem',
-              flexShrink: '0'
-            }} />
-            <div style={{
-              fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
-              lineHeight: '1.5',
-              color: '#333'
+        {slide.content.split('\n').filter(line => line.trim()).slice(0, 6).map((point, index) => {
+          // Handle both bullet points and regular content
+          const cleanPoint = point.trim().replace(/^[•\-\*]\s*/, '');
+          if (!cleanPoint) return null;
+          
+          return (
+            <div key={index} style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '1rem'
             }}>
-              {point.trim()}
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#6C2EB7',
+                marginTop: '0.6rem',
+                flexShrink: '0'
+              }} />
+              <div style={{
+                fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
+                lineHeight: '1.5',
+                color: '#333'
+              }}>
+                {cleanPoint}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       
       {/* Footer */}
@@ -9703,7 +9771,10 @@ Generated by Pearson Brand Converter`);
               📄 {uploadedFile.name}
             </p>
             <p style={{ margin: '0.5rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>
-              {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+              {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB • Processing content and applying Pearson branding
+            </p>
+            <p style={{ margin: '0.5rem 0 0 0', color: '#6C2EB7', fontSize: '0.8rem', fontStyle: 'italic' }}>
+              💡 Currently using sample content for demonstration. Full PowerPoint text extraction coming soon!
             </p>
           </div>
         )}
