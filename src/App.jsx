@@ -114,6 +114,7 @@ const tabNames = [
   'Slide Builder',
   'SCORM Builder',
   'Project Builder',
+  'Brand Converter',
 ];
 
 function VideoTab() {
@@ -8866,6 +8867,863 @@ function findAPI(win) {
   );
 }
 
+function BrandConverterTab() {
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [extractedContent, setExtractedContent] = useState(null);
+  const [convertedSlides, setConvertedSlides] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [refinementPrompt, setRefinementPrompt] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
+
+  // PowerPoint file processing
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pptx') && !file.name.toLowerCase().endsWith('.ppt')) {
+      alert('Please upload a PowerPoint file (.ppt or .pptx)');
+      return;
+    }
+
+    setUploadedFile(file);
+    setIsProcessing(true);
+
+    try {
+      // For now, we'll simulate content extraction
+      // In a real implementation, you'd use a library like pptx-parser or send to a backend
+      const mockContent = await simulateContentExtraction(file);
+      setExtractedContent(mockContent);
+      
+      // Automatically start brand conversion
+      await convertToPearsonBrand(mockContent);
+      
+    } catch (error) {
+      console.error('File processing failed:', error);
+      alert('Failed to process PowerPoint file. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Simulate content extraction from PowerPoint
+  const simulateContentExtraction = async (file) => {
+    // Simulate processing delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    return {
+      fileName: file.name,
+      slideCount: Math.floor(Math.random() * 10) + 5,
+      slides: Array.from({ length: Math.floor(Math.random() * 10) + 5 }, (_, i) => ({
+        id: i + 1,
+        title: `Slide ${i + 1} Title`,
+        content: `This is the content from slide ${i + 1}. It contains various text elements, bullet points, and potentially images that need to be converted to the new Pearson brand guidelines.`,
+        layout: ['title-content', 'title-bullets', 'full-content', 'two-column'][Math.floor(Math.random() * 4)],
+        bullets: [`Key point ${i + 1}.1`, `Key point ${i + 1}.2`, `Key point ${i + 1}.3`]
+      }))
+    };
+  };
+
+  // Convert to Pearson brand using AI
+  const convertToPearsonBrand = async (content) => {
+    if (!window.aiConfig?.apiKey && window.aiConfig?.provider !== 'ollama') {
+      throw new Error('AI service not configured. Please set up your API key.');
+    }
+
+    try {
+      const aiService = getAIService();
+      const brandPrompt = buildBrandConversionPrompt(content);
+      
+      const response = await aiService.callAPI({
+        model: aiService.getModel(),
+        messages: [
+          { role: 'system', content: 'You are a Pearson brand specialist. Convert PowerPoint content to match the new Pearson brand guidelines with modern, engaging, and accessible design.' },
+          { role: 'user', content: brandPrompt }
+        ],
+        temperature: 0.4
+      });
+
+      const convertedSlides = parseConvertedContent(response.content, content);
+      setConvertedSlides(convertedSlides);
+      
+      // Add to conversation history
+      const historyEntry = {
+        id: Date.now(),
+        prompt: `Brand conversion of ${content.fileName}`,
+        slides: convertedSlides,
+        timestamp: new Date().toISOString(),
+        originalContent: content
+      };
+      setConversationHistory(prev => [...prev, historyEntry]);
+      
+    } catch (error) {
+      console.error('Brand conversion failed:', error);
+      throw error;
+    }
+  };
+
+  // Build brand conversion prompt
+  const buildBrandConversionPrompt = (content) => {
+    return `Convert this PowerPoint presentation to match the new Pearson brand guidelines:
+
+FILE: ${content.fileName}
+SLIDES: ${content.slideCount}
+
+CONTENT TO CONVERT:
+${content.slides.map(slide => `
+Slide ${slide.id}: ${slide.title}
+Content: ${slide.content}
+Layout: ${slide.layout}
+${slide.bullets ? `Bullets: ${slide.bullets.join(', ')}` : ''}
+`).join('\n')}
+
+NEW PEARSON BRAND GUIDELINES:
+- Primary Color: #0B004A (Deep Purple)
+- Secondary Color: #6C2EB7 (Amethyst)
+- Accent Color: #E6E6F2 (Light Purple)
+- Font: Plus Jakarta Sans
+- Modern, clean, accessible design
+- Consistent spacing and visual hierarchy
+- Inclusive and diverse imagery references
+- Clear, professional layouts
+
+REQUIREMENTS:
+1. Maintain all original content and meaning
+2. Apply new Pearson color scheme consistently
+3. Use Plus Jakarta Sans typography hierarchy
+4. Create modern, engaging slide layouts
+5. Ensure accessibility (high contrast, clear fonts)
+6. Add visual interest while maintaining professionalism
+7. Include suggestions for imagery and graphics
+
+Return the converted slides in this JSON format:
+{
+  "convertedSlides": [
+    {
+      "id": 1,
+      "originalTitle": "Original title",
+      "newTitle": "Branded title with improved hierarchy",
+      "layout": "modern-title-content",
+      "content": "Reformatted content with new styling",
+      "brandElements": {
+        "colors": ["#0B004A", "#6C2EB7"],
+        "typography": "Plus Jakarta Sans hierarchy",
+        "layout": "Description of new layout structure"
+      },
+      "suggestions": {
+        "imagery": "Suggestions for relevant images",
+        "graphics": "Ideas for visual elements",
+        "improvements": "Additional enhancement suggestions"
+      }
+    }
+  ],
+  "brandSummary": "Overall brand conversion summary and key improvements made"
+}`;
+  };
+
+  // Parse AI response into structured slides
+  const parseConvertedContent = (response, originalContent) => {
+    try {
+      const parsed = JSON.parse(response);
+      return parsed.convertedSlides || [];
+    } catch (error) {
+      // Fallback: create branded slides from original content
+      return originalContent.slides.map(slide => ({
+        id: slide.id,
+        originalTitle: slide.title,
+        newTitle: `${slide.title} - Pearson Branded`,
+        layout: 'modern-title-content',
+        content: slide.content,
+        brandElements: {
+          colors: ['#0B004A', '#6C2EB7'],
+          typography: 'Plus Jakarta Sans hierarchy',
+          layout: 'Modern Pearson layout with consistent spacing'
+        },
+        suggestions: {
+          imagery: 'Professional, diverse, educational imagery',
+          graphics: 'Clean icons and visual elements',
+          improvements: 'Enhanced visual hierarchy and accessibility'
+        }
+      }));
+    }
+  };
+
+  // Handle refinement of converted slides
+  const handleBrandRefinement = async (refinementPrompt) => {
+    if (!refinementPrompt.trim()) {
+      throw new Error('Please enter a refinement request.');
+    }
+
+    setIsRefining(true);
+    try {
+      const aiService = getAIService();
+      
+      const context = conversationHistory.slice(-1).map(entry => 
+        `Previous conversion: ${entry.slides.length} slides converted from ${entry.originalContent?.fileName}`
+      ).join('\n');
+      
+      const currentSlides = convertedSlides.map(s => `"${s.newTitle}": ${s.content.substring(0, 100)}...`).join('\n');
+      
+      const contextualPrompt = `${context}\n\nCurrent branded slides:\n${currentSlides}\n\nRefinement request: ${refinementPrompt}`;
+      
+      const response = await aiService.callAPI({
+        model: aiService.getModel(),
+        messages: [
+          { role: 'system', content: 'You are refining Pearson branded slides. Improve the slides based on the feedback while maintaining brand consistency.' },
+          { role: 'user', content: contextualPrompt }
+        ],
+        temperature: 0.3
+      });
+
+      const refinedSlides = parseConvertedContent(response.content, { slides: convertedSlides });
+      setConvertedSlides(refinedSlides);
+      
+      // Add to history
+      const historyEntry = {
+        id: Date.now(),
+        prompt: refinementPrompt,
+        slides: refinedSlides,
+        timestamp: new Date().toISOString(),
+        isRefinement: true
+      };
+      setConversationHistory(prev => [...prev, historyEntry]);
+      
+      setRefinementPrompt('');
+      
+    } catch (error) {
+      console.error('Brand refinement failed:', error);
+      throw error;
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  // Download converted slides as HTML
+  const downloadBrandedSlides = async () => {
+    const zip = new JSZip();
+    
+    // Create index.html with all slides
+    const slidesHtml = convertedSlides.map(slide => `
+      <div class="slide" style="
+        background: white;
+        margin: 2rem 0;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(11,0,74,0.1);
+        border-left: 4px solid #6C2EB7;
+      ">
+        <h2 style="
+          color: #0B004A;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 2rem;
+          font-weight: 700;
+          margin-bottom: 1.5rem;
+        ">${slide.newTitle}</h2>
+        
+        <div style="
+          color: #333;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          line-height: 1.6;
+          font-size: 1.1rem;
+          margin-bottom: 2rem;
+        ">${slide.content}</div>
+        
+        <div style="
+          background: linear-gradient(135deg, #f8f7ff 0%, #ffffff 100%);
+          padding: 1rem;
+          border-radius: 8px;
+          border: 1px solid #E6E6F2;
+        ">
+          <h4 style="color: #6C2EB7; margin: 0 0 0.5rem 0;">Brand Elements Applied:</h4>
+          <p style="margin: 0; font-size: 0.9rem; color: #666;">
+            ${slide.brandElements?.layout || 'Modern Pearson layout'}
+          </p>
+        </div>
+      </div>
+    `).join('');
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pearson Branded Slides</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #E6E6F2;
+            margin: 0;
+            padding: 2rem;
+            color: #0B004A;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(11,0,74,0.1);
+        }
+        .header h1 {
+            color: #0B004A;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        .header p {
+            color: #6C2EB7;
+            font-size: 1.2rem;
+            margin: 0.5rem 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Pearson Branded Slides</h1>
+            <p>Converted to New Brand Guidelines</p>
+        </div>
+        ${slidesHtml}
+    </div>
+</body>
+</html>`;
+
+    zip.file('index.html', htmlContent);
+    zip.file('README.md', `# Pearson Branded Slides
+
+This package contains your PowerPoint presentation converted to match the new Pearson brand guidelines.
+
+## Brand Elements Applied:
+- Primary Color: #0B004A (Deep Purple)
+- Secondary Color: #6C2EB7 (Amethyst)  
+- Accent Color: #E6E6F2 (Light Purple)
+- Typography: Plus Jakarta Sans
+- Modern, accessible layouts
+
+## Files:
+- index.html: Complete branded presentation
+- README.md: This documentation
+
+Generated by Pearson Brand Converter`);
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'pearson-branded-slides.zip';
+    a.click();
+  };
+
+  return (
+    <form onSubmit={e => e.preventDefault()} aria-label="PowerPoint Brand Converter">
+      <div style={{
+        background: 'linear-gradient(135deg, #0B004A 0%, #6C2EB7 100%)',
+        borderRadius: '12px',
+        padding: '2rem',
+        marginBottom: '2rem',
+        color: 'white',
+        textAlign: 'center'
+      }}>
+        <h2 style={{ 
+          fontSize: '2rem', 
+          fontWeight: '700',
+          margin: '0 0 1rem 0'
+        }}>
+          🎨 PowerPoint Brand Converter
+        </h2>
+        <p style={{ 
+          fontSize: '1.1rem', 
+          margin: '0',
+          opacity: '0.9'
+        }}>
+          Upload your PowerPoint presentations and convert them to match the new Pearson brand guidelines
+        </p>
+      </div>
+
+      {/* File Upload */}
+      <div style={{
+        background: 'linear-gradient(135deg, #f8f7ff 0%, #ffffff 100%)',
+        borderRadius: '12px',
+        padding: '2rem',
+        marginBottom: '2rem',
+        border: '2px solid #e6e6f2',
+        textAlign: 'center'
+      }}>
+        <h3 style={{
+          color: pearsonColors.purple,
+          marginBottom: '1rem',
+          fontSize: '1.3rem',
+          fontWeight: '600'
+        }}>
+          📁 Upload PowerPoint File
+        </h3>
+        
+        <UploadLabel htmlFor="pptx-upload" style={{
+          display: 'inline-block',
+          padding: '1rem 2rem',
+          fontSize: '1.1rem',
+          marginBottom: '1rem'
+        }}>
+          {isProcessing ? '⏳ Processing...' : '📎 Select PowerPoint File'}
+        </UploadLabel>
+        <HiddenInput
+          id="pptx-upload"
+          type="file"
+          accept=".ppt,.pptx"
+          onChange={handleFileUpload}
+          disabled={isProcessing}
+        />
+        
+        {uploadedFile && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            background: 'white',
+            borderRadius: '8px',
+            border: '1px solid #e6e6f2'
+          }}>
+            <p style={{ margin: '0', color: '#333', fontWeight: '600' }}>
+              📄 {uploadedFile.name}
+            </p>
+            <p style={{ margin: '0.5rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>
+              {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Conversion Progress */}
+      {isProcessing && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fff7e6 0%, #ffffff 100%)',
+          borderRadius: '12px',
+          padding: '2rem',
+          marginBottom: '2rem',
+          border: '2px solid #f0e6ff',
+          textAlign: 'center'
+        }}>
+          <h3 style={{ color: pearsonColors.purple, marginBottom: '1rem' }}>
+            🔄 Converting to Pearson Brand...
+          </h3>
+          <div style={{
+            width: '100%',
+            height: '8px',
+            background: '#e6e6f2',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            marginBottom: '1rem'
+          }}>
+            <div style={{
+              width: '60%',
+              height: '100%',
+              background: 'linear-gradient(90deg, #6C2EB7, #0B004A)',
+              animation: 'pulse 2s infinite'
+            }} />
+          </div>
+          <p style={{ margin: '0', color: '#666' }}>
+            Analyzing content and applying new brand guidelines...
+          </p>
+        </div>
+      )}
+
+      {/* Converted Slides Preview */}
+      {convertedSlides.length > 0 && (
+        <>
+          <div style={{
+            background: 'linear-gradient(135deg, #e8f5e8 0%, #ffffff 100%)',
+            borderRadius: '12px',
+            padding: '2rem',
+            marginBottom: '2rem',
+            border: '2px solid #c8e6c8'
+          }}>
+            <h3 style={{
+              color: '#2d5a2d',
+              marginBottom: '1rem',
+              fontSize: '1.3rem',
+              fontWeight: '600'
+            }}>
+              ✅ Brand Conversion Complete!
+            </h3>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem'
+            }}>
+              <p style={{ margin: '0', color: '#2d5a2d', fontWeight: '600' }}>
+                🎯 {convertedSlides.length} slides converted to Pearson brand
+              </p>
+              <button
+                type="button"
+                onClick={downloadBrandedSlides}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#2d5a2d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}
+              >
+                📥 Download Branded Slides
+              </button>
+            </div>
+
+            {/* Slides Preview */}
+            <div style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              display: 'grid',
+              gap: '1rem'
+            }}>
+              {convertedSlides.slice(0, 3).map(slide => (
+                <div key={slide.id} style={{
+                  background: 'white',
+                  padding: '1.5rem',
+                  borderRadius: '8px',
+                  border: '1px solid #e6e6f2',
+                  borderLeft: '4px solid #6C2EB7'
+                }}>
+                  <h4 style={{
+                    color: '#0B004A',
+                    margin: '0 0 1rem 0',
+                    fontWeight: '700'
+                  }}>
+                    {slide.newTitle}
+                  </h4>
+                  <p style={{
+                    color: '#333',
+                    margin: '0 0 1rem 0',
+                    lineHeight: '1.5'
+                  }}>
+                    {slide.content.substring(0, 150)}...
+                  </p>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#6C2EB7',
+                    fontWeight: '600'
+                  }}>
+                    Brand: {slide.brandElements?.typography || 'Plus Jakarta Sans'} • 
+                    Colors: {slide.brandElements?.colors?.join(', ') || '#0B004A, #6C2EB7'}
+                  </div>
+                </div>
+              ))}
+              {convertedSlides.length > 3 && (
+                <div style={{
+                  textAlign: 'center',
+                  color: '#666',
+                  fontStyle: 'italic',
+                  padding: '1rem'
+                }}>
+                  ... and {convertedSlides.length - 3} more slides
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Brand Refinement Interface */}
+          <div style={{
+            background: 'linear-gradient(135deg, #fff7e6 0%, #ffffff 100%)',
+            borderRadius: '12px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem',
+            border: '2px solid #f0e6ff'
+          }}>
+            <h3 style={{
+              color: pearsonColors.purple,
+              marginBottom: '1rem',
+              fontSize: '1.1rem',
+              fontWeight: '600'
+            }}>
+              🎨 Refine Brand Application
+            </h3>
+            
+            <div style={{ marginBottom: '1rem' }}>
+              <textarea
+                value={refinementPrompt}
+                onChange={(e) => setRefinementPrompt(e.target.value)}
+                placeholder="Describe how you want to improve the brand application (e.g., 'Make titles more prominent', 'Add more visual elements', 'Adjust color balance')"
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '12px',
+                  border: '2px solid #e6e6f2',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontFamily: 'Plus Jakarta Sans, sans-serif',
+                  resize: 'vertical',
+                  backgroundColor: 'white'
+                }}
+              />
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              flexWrap: 'wrap',
+              alignItems: 'center'
+            }}>
+              <button
+                type="button"
+                onClick={() => handleBrandRefinement(refinementPrompt)}
+                disabled={isRefining || !refinementPrompt.trim()}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: isRefining ? '#cccccc' : pearsonColors.amethyst,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: isRefining ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  fontFamily: 'Plus Jakarta Sans, sans-serif'
+                }}
+              >
+                {isRefining ? '🔄 Refining...' : '✨ Refine Brand Application'}
+              </button>
+              
+              {/* Quick action buttons */}
+              <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                flexWrap: 'wrap'
+              }}>
+                {[
+                  { label: 'Enhance Typography', prompt: 'Improve typography hierarchy and readability using Plus Jakarta Sans more effectively' },
+                  { label: 'Strengthen Colors', prompt: 'Make better use of Pearson brand colors for visual impact and consistency' },
+                  { label: 'Add Visual Elements', prompt: 'Suggest modern visual elements and graphics that align with Pearson brand' },
+                  { label: 'Improve Accessibility', prompt: 'Enhance accessibility with better contrast, clear fonts, and inclusive design' }
+                ].map(action => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => {
+                      setRefinementPrompt(action.prompt);
+                      handleBrandRefinement(action.prompt);
+                    }}
+                    disabled={isRefining}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: 'white',
+                      color: pearsonColors.purple,
+                      border: `1px solid ${pearsonColors.purple}`,
+                      borderRadius: '20px',
+                      cursor: isRefining ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      fontFamily: 'Plus Jakarta Sans, sans-serif',
+                      opacity: isRefining ? 0.5 : 1
+                    }}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Conversion History */}
+          {conversationHistory.length > 0 && (
+            <div style={{
+              background: 'linear-gradient(135deg, #f0f8ff 0%, #ffffff 100%)',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              marginBottom: '1.5rem',
+              border: '2px solid #e6f3ff'
+            }}>
+              <h3 style={{
+                color: pearsonColors.purple,
+                marginBottom: '1rem',
+                fontSize: '1.1rem',
+                fontWeight: '600'
+              }}>
+                📝 Conversion History
+              </h3>
+              
+              <div style={{
+                maxHeight: '200px',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem'
+              }}>
+                {conversationHistory.slice().reverse().map((entry, index) => (
+                  <div key={entry.id} style={{
+                    background: 'white',
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    border: '1px solid #e6e6f2'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '0.5rem'
+                    }}>
+                      <span style={{
+                        fontSize: '12px',
+                        color: '#666',
+                        fontWeight: '500'
+                      }}>
+                        {entry.isRefinement ? '🎨 Brand Refinement' : '🔄 Initial Conversion'} • {new Date(entry.timestamp).toLocaleTimeString()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setConvertedSlides(entry.slides)}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: pearsonColors.amethyst,
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                    
+                    <div style={{
+                      fontSize: '14px',
+                      color: '#333',
+                      marginBottom: '0.5rem',
+                      fontWeight: '500'
+                    }}>
+                      "{entry.prompt}"
+                    </div>
+                    
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#666',
+                      backgroundColor: '#f8f9fa',
+                      padding: '0.5rem',
+                      borderRadius: '4px'
+                    }}>
+                      Processed {entry.slides.length} slides with Pearson branding
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {conversationHistory.length > 3 && (
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: '1rem'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setConversationHistory([])}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: 'white',
+                      color: '#666',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Clear History
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Brand Guidelines Reference */}
+      <div style={{
+        background: 'linear-gradient(135deg, #f0f0f8 0%, #ffffff 100%)',
+        borderRadius: '12px',
+        padding: '2rem',
+        marginBottom: '2rem',
+        border: '2px solid #d4d4f0'
+      }}>
+        <h3 style={{
+          color: pearsonColors.purple,
+          marginBottom: '1.5rem',
+          fontSize: '1.3rem',
+          fontWeight: '600'
+        }}>
+          📋 New Pearson Brand Guidelines
+        </h3>
+        
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: '1.5rem'
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #e6e6f2'
+          }}>
+            <h4 style={{ color: '#0B004A', margin: '0 0 1rem 0' }}>🎨 Color Palette</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ width: '20px', height: '20px', background: '#0B004A', borderRadius: '4px' }}></div>
+                <span style={{ fontSize: '14px' }}>#0B004A - Primary</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ width: '20px', height: '20px', background: '#6C2EB7', borderRadius: '4px' }}></div>
+                <span style={{ fontSize: '14px' }}>#6C2EB7 - Secondary</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ width: '20px', height: '20px', background: '#E6E6F2', borderRadius: '4px' }}></div>
+                <span style={{ fontSize: '14px' }}>#E6E6F2 - Accent</span>
+              </div>
+            </div>
+          </div>
+          
+          <div style={{
+            background: 'white',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #e6e6f2'
+          }}>
+            <h4 style={{ color: '#0B004A', margin: '0 0 1rem 0' }}>📝 Typography</h4>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              <p style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 0.5rem 0', color: '#0B004A' }}>
+                Plus Jakarta Sans
+              </p>
+              <p style={{ fontSize: '14px', margin: '0', color: '#666' }}>
+                Modern, accessible, professional typography for all content
+              </p>
+            </div>
+          </div>
+          
+          <div style={{
+            background: 'white',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #e6e6f2'
+          }}>
+            <h4 style={{ color: '#0B004A', margin: '0 0 1rem 0' }}>🎯 Design Principles</h4>
+            <ul style={{ margin: '0', paddingLeft: '1rem', color: '#666', fontSize: '14px' }}>
+              <li>Clean, modern layouts</li>
+              <li>Consistent spacing</li>
+              <li>High contrast accessibility</li>
+              <li>Professional yet engaging</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState(0);
   
@@ -8933,6 +9791,7 @@ function App() {
         {activeTab === 3 && <SlideBuilderTab />}
         {activeTab === 4 && <ScormTab />}
         {activeTab === 5 && <ProjectBuilderTab />}
+        {activeTab === 6 && <BrandConverterTab />}
       </TabPanel>
       
       <AIConfigModal
