@@ -1468,36 +1468,262 @@ function ScenarioTab() {
     </div>
     
     <script>
-        // Simple form handling for LMS integration
+        // Enhanced SCORM API Interface for Adobe LMS Integration
+        var API = null;
+        var apiHandle = null;
+        var findAPITries = 0;
+        var scormVersion = null;
+        var isInitialized = false;
+        
+        function findAPI(win) {
+            // Look for SCORM 2004 API first
+            while ((win.API_1484_11 == null) && (win.parent != null) && (win.parent != win)) {
+                findAPITries++;
+                if (findAPITries > 500) break;
+                win = win.parent;
+            }
+            
+            if (win.API_1484_11 != null) {
+                scormVersion = "2004";
+                return win.API_1484_11;
+            }
+            
+            // Fallback to SCORM 1.2 API
+            findAPITries = 0;
+            while ((win.API == null) && (win.parent != null) && (win.parent != win)) {
+                findAPITries++;
+                if (findAPITries > 500) break;
+                win = win.parent;
+            }
+            
+            if (win.API != null) {
+                scormVersion = "1.2";
+                return win.API;
+            }
+            
+            return null;
+        }
+        
+        function getAPI() {
+            if ((API == null) && (apiHandle == null)) {
+                apiHandle = findAPI(window);
+                if ((apiHandle == null) && (window.opener != null)) {
+                    apiHandle = findAPI(window.opener);
+                }
+                if (apiHandle != null) API = apiHandle;
+            }
+            return API;
+        }
+        
+        function initializeSCORM() {
+            var api = getAPI();
+            if (api != null) {
+                var result;
+                try {
+                    if (scormVersion === "2004") {
+                        result = api.Initialize("");
+                        if (result === "true") {
+                            api.SetValue("cmi.completion_status", "incomplete");
+                            api.SetValue("cmi.success_status", "unknown");
+                            api.SetValue("cmi.mode", "normal");
+                            api.Commit("");
+                            isInitialized = true;
+                            console.log("SCORM 2004 initialized successfully");
+                            return true;
+                        }
+                    } else {
+                        result = api.LMSInitialize("");
+                        if (result === "true") {
+                            api.LMSSetValue("cmi.core.lesson_status", "incomplete");
+                            api.LMSCommit("");
+                            isInitialized = true;
+                            console.log("SCORM 1.2 initialized successfully");
+                            return true;
+                        }
+                    }
+                } catch (error) {
+                    console.error("SCORM initialization error:", error);
+                }
+            }
+            console.warn("SCORM API not available or initialization failed");
+            return false;
+        }
+        
+        function saveSCORMInteraction(id, response, scenarioTitle) {
+            var api = getAPI();
+            if (api != null && isInitialized) {
+                try {
+                    var count;
+                    if (scormVersion === "2004") {
+                        count = parseInt(api.GetValue("cmi.interactions._count") || "0");
+                        api.SetValue("cmi.interactions." + count + ".id", id);
+                        api.SetValue("cmi.interactions." + count + ".type", "fill-in");
+                        api.SetValue("cmi.interactions." + count + ".learner_response", response);
+                        api.SetValue("cmi.interactions." + count + ".result", "neutral");
+                        api.SetValue("cmi.interactions." + count + ".description", scenarioTitle);
+                        api.SetValue("cmi.interactions." + count + ".timestamp", new Date().toISOString());
+                        api.SetValue("cmi.interactions._count", (count + 1).toString());
+                        
+                        // Set overall score based on completion
+                        var totalResponses = document.querySelectorAll('textarea[required]').length;
+                        var completedResponses = Array.from(document.querySelectorAll('textarea[required]')).filter(t => t.value.trim()).length;
+                        var score = Math.round((completedResponses / totalResponses) * 100);
+                        api.SetValue("cmi.score.scaled", (score / 100).toString());
+                        api.SetValue("cmi.score.raw", score.toString());
+                        api.SetValue("cmi.score.min", "0");
+                        api.SetValue("cmi.score.max", "100");
+                        
+                        api.Commit("");
+                    } else {
+                        count = parseInt(api.LMSGetValue("cmi.interactions._count") || "0");
+                        api.LMSSetValue("cmi.interactions." + count + ".id", id);
+                        api.LMSSetValue("cmi.interactions." + count + ".type", "fill-in");
+                        api.LMSSetValue("cmi.interactions." + count + ".student_response", response);
+                        api.LMSSetValue("cmi.interactions." + count + ".result", "neutral");
+                        api.LMSSetValue("cmi.interactions." + count + ".description", scenarioTitle);
+                        api.LMSSetValue("cmi.interactions._count", (count + 1).toString());
+                        
+                        // Set overall score
+                        var totalResponses = document.querySelectorAll('textarea[required]').length;
+                        var completedResponses = Array.from(document.querySelectorAll('textarea[required]')).filter(t => t.value.trim()).length;
+                        var score = Math.round((completedResponses / totalResponses) * 100);
+                        api.LMSSetValue("cmi.core.score.raw", score.toString());
+                        api.LMSSetValue("cmi.core.score.min", "0");
+                        api.LMSSetValue("cmi.core.score.max", "100");
+                        
+                        api.LMSCommit("");
+                    }
+                    
+                    console.log("SCORM Interaction saved:", id, response.substring(0, 50) + "...");
+                    return true;
+                } catch (error) {
+                    console.error("Error saving SCORM interaction:", error);
+                    return false;
+                }
+            }
+            return false;
+        }
+        
+        function completeSCORM() {
+            var api = getAPI();
+            if (api != null && isInitialized) {
+                try {
+                    if (scormVersion === "2004") {
+                        api.SetValue("cmi.completion_status", "completed");
+                        api.SetValue("cmi.success_status", "passed");
+                        api.SetValue("cmi.exit", "normal");
+                        api.Commit("");
+                        api.Terminate("");
+                        console.log("SCORM 2004 session completed");
+                    } else {
+                        api.LMSSetValue("cmi.core.lesson_status", "completed");
+                        api.LMSSetValue("cmi.core.exit", "");
+                        api.LMSCommit("");
+                        api.LMSFinish("");
+                        console.log("SCORM 1.2 session completed");
+                    }
+                    return true;
+                } catch (error) {
+                    console.error("Error completing SCORM:", error);
+                    return false;
+                }
+            }
+            return false;
+        }
+        
+        // Enhanced form handling with SCORM integration
         document.querySelector('form').addEventListener('submit', function(e) {
             e.preventDefault();
             
-            // Check if all required fields are filled
             const textareas = document.querySelectorAll('textarea[required]');
             let allFilled = true;
+            let scormSaved = true;
+            let scormErrors = [];
             
-            textareas.forEach(textarea => {
+            // Validate all fields are filled
+            textareas.forEach((textarea, index) => {
                 if (!textarea.value.trim()) {
                     allFilled = false;
                     textarea.style.borderColor = '#ff4444';
                 } else {
-                    textarea.style.borderColor = '#e0dde9';
+                    textarea.style.borderColor = '#28a745';
                 }
             });
             
-            if (allFilled) {
-                alert('Assessment submitted successfully! Your instructor will provide feedback soon.');
-                // Here you would typically submit to your LMS
-                // window.parent.postMessage({type: 'submit', data: formData}, '*');
-            } else {
+            if (!allFilled) {
                 alert('Please complete all scenarios before submitting.');
+                return;
             }
+            
+            // Save each response as a SCORM interaction
+            textareas.forEach((textarea, index) => {
+                const scenarioTitle = "Scenario " + (index + 1) + " - Final Response";
+                const interactionId = "scenario_" + index + "_final_" + Date.now();
+                const success = saveSCORMInteraction(interactionId, textarea.value.trim(), scenarioTitle);
+                if (!success) {
+                    scormSaved = false;
+                    scormErrors.push("Scenario " + (index + 1));
+                }
+            });
+            
+            // Complete the SCORM session
+            const scormCompleted = completeSCORM();
+            
+            // Provide appropriate feedback
+            let message;
+            if (scormSaved && scormCompleted) {
+                message = '🎉 Assessment submitted successfully!\\n\\nYour responses have been saved to the LMS and are now available in your quiz reports for instructor review.';
+            } else if (scormSaved) {
+                message = '🎉 Assessment submitted successfully!\\n\\nYour responses were saved but there was an issue completing the SCORM session. Please contact your instructor if you don\\'t see this in your quiz reports.';
+            } else {
+                message = '⚠️ Assessment submitted with issues\\n\\nSome responses may not have been saved to the LMS properly. Please contact your instructor and mention the following scenarios had issues: ' + scormErrors.join(', ');
+            }
+            
+            alert(message);
+            
+            // Disable form after submission
+            textareas.forEach(textarea => textarea.disabled = true);
+            const submitButton = document.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = scormSaved && scormCompleted ? '✅ Submitted Successfully' : '⚠️ Submitted (Issues Detected)';
+            submitButton.style.backgroundColor = scormSaved && scormCompleted ? '#28a745' : '#ffc107';
         });
         
-        // Reset border color on focus
-        document.querySelectorAll('textarea[required]').forEach(textarea => {
+        // Auto-save individual responses to SCORM as user types
+        document.querySelectorAll('textarea[required]').forEach((textarea, index) => {
+            let saveTimeout;
+            
+            textarea.addEventListener('input', function() {
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(() => {
+                    if (this.value.trim().length > 20) {
+                        const scenarioTitle = "Scenario " + (index + 1) + " (Auto-save)";
+                        const interactionId = "scenario_" + index + "_autosave_" + Date.now();
+                        saveSCORMInteraction(interactionId, this.value.trim(), scenarioTitle);
+                    }
+                }, 3000); // Auto-save 3 seconds after user stops typing
+            });
+            
             textarea.addEventListener('focus', function() {
                 this.style.borderColor = '#663399';
+            });
+        });
+        
+        // Initialize SCORM when page loads
+        window.addEventListener('load', function() {
+            const scormInitialized = initializeSCORM();
+            console.log("SCORM initialized:", scormInitialized);
+        });
+        
+        // Save progress when page unloads
+        window.addEventListener('beforeunload', function() {
+            const textareas = document.querySelectorAll('textarea[required]');
+            textareas.forEach((textarea, index) => {
+                if (textarea.value.trim()) {
+                    const scenarioTitle = "Scenario " + (index + 1) + " (Final)";
+                    const interactionId = "scenario_" + index + "_final_" + Date.now();
+                    saveSCORMInteraction(interactionId, textarea.value.trim(), scenarioTitle);
+                }
             });
         });
     </script>
@@ -7670,6 +7896,45 @@ window.addEventListener('beforeunload', function() {
             var scormProgress = 0;
             var scormIsCompleted = false;
 
+            // Enhanced SCORM form data capture for uploaded content
+            function captureFormDataToSCORM() {
+                const api = getAPI();
+                if (api != null) {
+                    const formElements = document.querySelectorAll('input, textarea, select');
+                    let interactionCount = parseInt(api.LMSGetValue("cmi.interactions._count") || "0");
+                    
+                    formElements.forEach((element, index) => {
+                        if (element.value && element.value.trim() && 
+                            (element.type === 'text' || element.type === 'email' || 
+                             element.tagName.toLowerCase() === 'textarea' ||
+                             element.type === 'radio' && element.checked ||
+                             element.type === 'checkbox' && element.checked)) {
+                            
+                            const interactionId = "uploaded_form_" + (element.id || element.name || index) + "_" + Date.now();
+                            const elementType = element.tagName.toLowerCase() === 'textarea' ? 'fill-in' : 'choice';
+                            const description = element.getAttribute('data-scenario-title') || element.placeholder || element.name || ('Form Response ' + (index + 1));
+                            
+                            try {
+                                api.LMSSetValue("cmi.interactions." + interactionCount + ".id", interactionId);
+                                api.LMSSetValue("cmi.interactions." + interactionCount + ".type", elementType);
+                                api.LMSSetValue("cmi.interactions." + interactionCount + ".student_response", element.value.trim());
+                                api.LMSSetValue("cmi.interactions." + interactionCount + ".result", "neutral");
+                                api.LMSSetValue("cmi.interactions." + interactionCount + ".description", description);
+                                interactionCount++;
+                            } catch (error) {
+                                console.error("Error saving form element to SCORM:", error);
+                            }
+                        }
+                    });
+                    
+                    api.LMSSetValue("cmi.interactions._count", interactionCount.toString());
+                    api.LMSCommit("");
+                    console.log("Form data captured to SCORM:", interactionCount, "interactions");
+                    return true;
+                }
+                return false;
+            }
+
             // Load saved progress on start
             window.addEventListener('load', function() {
                 const savedProgress = loadProgress();
@@ -7677,6 +7942,44 @@ window.addEventListener('beforeunload', function() {
                     scormProgress = savedProgress.progress || 0;
                     console.log('Loaded progress:', savedProgress);
                 }
+                
+                // Auto-capture form data on form submission
+                const forms = document.querySelectorAll('form');
+                forms.forEach(form => {
+                    form.addEventListener('submit', function(e) {
+                        const success = captureFormDataToSCORM();
+                        if (success) {
+                            console.log('Form responses saved to LMS successfully');
+                        }
+                    });
+                });
+                
+                // Auto-save significant text areas as user types
+                const textareas = document.querySelectorAll('textarea');
+                textareas.forEach((textarea, index) => {
+                    let saveTimeout;
+                    textarea.addEventListener('input', function() {
+                        clearTimeout(saveTimeout);
+                        saveTimeout = setTimeout(() => {
+                            if (this.value.trim().length > 20) {
+                                const api = getAPI();
+                                if (api != null) {
+                                    const count = parseInt(api.LMSGetValue("cmi.interactions._count") || "0");
+                                    const interactionId = "textarea_autosave_" + index + "_" + Date.now();
+                                    const description = this.getAttribute('data-scenario-title') || this.placeholder || 'Text Response (Auto-save)';
+                                    
+                                    api.LMSSetValue("cmi.interactions." + count + ".id", interactionId);
+                                    api.LMSSetValue("cmi.interactions." + count + ".type", "fill-in");
+                                    api.LMSSetValue("cmi.interactions." + count + ".student_response", this.value.trim());
+                                    api.LMSSetValue("cmi.interactions." + count + ".result", "neutral");
+                                    api.LMSSetValue("cmi.interactions." + count + ".description", description);
+                                    api.LMSSetValue("cmi.interactions._count", (count + 1).toString());
+                                    api.LMSCommit("");
+                                }
+                            }
+                        }, 4000); // Auto-save after 4 seconds of inactivity
+                    });
+                });
             });
 
             function scormSaveProgress(showAlert = true) {
@@ -7694,10 +7997,12 @@ window.addEventListener('beforeunload', function() {
 
             // Auto-save when user navigates away or closes the page
             window.addEventListener('beforeunload', function() {
+                captureFormDataToSCORM();
                 scormSaveProgress(false);
             });
 
             window.addEventListener('pagehide', function() {
+                captureFormDataToSCORM();
                 scormSaveProgress(false);
             });
 
