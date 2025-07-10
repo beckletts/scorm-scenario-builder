@@ -1251,9 +1251,11 @@ function ScenarioTab() {
   }
 
   async function handleDownloadZip() {
-    const zip = new JSZip();
-    
-    // Generate HTML with interactive scenario form for Adobe LMS
+    console.log("handleDownloadZip called - starting scenario HTML generation");
+    try {
+      const zip = new JSZip();
+      
+      // Generate HTML with interactive scenario form for Adobe LMS
     let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1936,12 +1938,17 @@ function ScenarioTab() {
 </body>
 </html>`;
     
-    zip.file('scenario_assessment.html', html);
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'scenario_assessment.zip';
-    a.click();
+      zip.file('scenario_assessment.html', html);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'scenario_assessment.zip';
+      a.click();
+      console.log("Scenario HTML generation completed successfully");
+    } catch (error) {
+      console.error("Error generating scenario HTML:", error);
+      alert("Error generating HTML. Please check the console for details.");
+    }
   }
 
   async function handleDownloadWebsite() {
