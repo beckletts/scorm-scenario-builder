@@ -1725,7 +1725,7 @@ function ScenarioTab() {
             debugLog("SCORM save status:", { scormSaved, scormCompleted, scormErrors });
             
             // Always provide success feedback - form submission always works
-            let message = '🎉 Assessment completed successfully!\\n\\nYou can now download a PDF of your responses to submit to your instructor.';
+            let message = '🎉 Assessment completed successfully!\\n\\nGenerating PDF for download...';
             
             alert(message);
             
@@ -1745,82 +1745,123 @@ function ScenarioTab() {
             textareas.forEach((textarea, index) => {
                 console.log("Scenario " + (index + 1) + ":", textarea.value.trim());
             });
+            
+            // Automatically generate PDF after a short delay
+            setTimeout(() => {
+                try {
+                    generatePDF();
+                } catch (error) {
+                    console.error("Error generating PDF:", error);
+                    alert('PDF generation failed. Please try clicking the "Download PDF" button manually.');
+                }
+            }, 1000);
         });
         
         // PDF Generation Function
         function generatePDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
+            console.log("PDF generation started...");
             
-            // Get assessment title
-            const titleElement = document.querySelector('.header h1');
-            const title = titleElement ? titleElement.textContent : 'Scenario Assessment';
-            
-            // Add title
-            doc.setFontSize(20);
-            doc.setFont(undefined, 'bold');
-            doc.text(title, 20, 30);
-            
-            // Add date
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'normal');
-            doc.text('Completed on: ' + new Date().toLocaleDateString(), 20, 45);
-            
-            // Add student name (if available)
-            const studentName = prompt('Enter your name for the PDF:');
-            if (studentName) {
-                doc.text('Student: ' + studentName, 20, 55);
+            // Check if jsPDF is loaded
+            if (!window.jspdf) {
+                console.error("jsPDF library not loaded");
+                alert('PDF library not loaded. Please refresh the page and try again.');
+                return;
             }
             
-            let yPosition = 70;
-            
-            // Add each scenario and response
-            const textareas = document.querySelectorAll('textarea[required]');
-            textareas.forEach((textarea, index) => {
-                const scenarioElement = textarea.closest('.scenario').querySelector('.scenario-content');
-                const scenarioText = scenarioElement ? scenarioElement.textContent : 'Scenario ' + (index + 1);
-                const response = textarea.value.trim();
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
                 
-                // Check if we need a new page
-                if (yPosition > 250) {
-                    doc.addPage();
-                    yPosition = 20;
+                console.log("jsPDF initialized successfully");
+                
+                // Get assessment title
+                const titleElement = document.querySelector('.header h1');
+                const title = titleElement ? titleElement.textContent : 'Scenario Assessment';
+                
+                // Add title
+                doc.setFontSize(20);
+                doc.setFont(undefined, 'bold');
+                doc.text(title, 20, 30);
+                
+                // Add date
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'normal');
+                doc.text('Completed on: ' + new Date().toLocaleDateString(), 20, 45);
+                
+                // Add student name (if available)
+                const studentName = prompt('Enter your name for the PDF:');
+                if (studentName) {
+                    doc.text('Student: ' + studentName, 20, 55);
                 }
                 
-                // Add scenario title
-                doc.setFontSize(14);
-                doc.setFont(undefined, 'bold');
-                doc.text('Scenario ' + (index + 1), 20, yPosition);
-                yPosition += 10;
+                let yPosition = studentName ? 70 : 60;
                 
-                // Add scenario content (wrap text)
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                const scenarioLines = doc.splitTextToSize(scenarioText, 170);
-                doc.text(scenarioLines, 20, yPosition);
-                yPosition += scenarioLines.length * 5 + 5;
+                // Add each scenario and response
+                const textareas = document.querySelectorAll('textarea[required]');
+                console.log("Found " + textareas.length + " textareas");
                 
-                // Add response title
-                doc.setFontSize(12);
-                doc.setFont(undefined, 'bold');
-                doc.text('Response:', 20, yPosition);
-                yPosition += 10;
+                textareas.forEach((textarea, index) => {
+                    const scenarioElement = textarea.closest('.scenario').querySelector('.scenario-content');
+                    const scenarioText = scenarioElement ? scenarioElement.textContent.trim() : 'Scenario ' + (index + 1);
+                    const response = textarea.value.trim();
+                    
+                    console.log("Processing scenario " + (index + 1) + ", response length: " + response.length);
+                    
+                    // Check if we need a new page
+                    if (yPosition > 250) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    // Add scenario title
+                    doc.setFontSize(14);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Scenario ' + (index + 1), 20, yPosition);
+                    yPosition += 10;
+                    
+                    // Add scenario content (wrap text)
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'normal');
+                    const scenarioLines = doc.splitTextToSize(scenarioText, 170);
+                    doc.text(scenarioLines, 20, yPosition);
+                    yPosition += scenarioLines.length * 5 + 5;
+                    
+                    // Add response title
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Response:', 20, yPosition);
+                    yPosition += 10;
+                    
+                    // Add response content (wrap text)
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'normal');
+                    const responseLines = doc.splitTextToSize(response || 'No response provided', 170);
+                    doc.text(responseLines, 20, yPosition);
+                    yPosition += responseLines.length * 5 + 15;
+                });
                 
-                // Add response content (wrap text)
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                const responseLines = doc.splitTextToSize(response || 'No response provided', 170);
-                doc.text(responseLines, 20, yPosition);
-                yPosition += responseLines.length * 5 + 15;
-            });
-            
-            // Save the PDF
-            const fileName = title.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
-            doc.save(fileName);
+                // Save the PDF
+                const fileName = title.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+                console.log("Saving PDF as: " + fileName);
+                doc.save(fileName);
+                console.log("PDF generated successfully!");
+                
+            } catch (error) {
+                console.error("Error in PDF generation:", error);
+                alert('Error generating PDF: ' + error.message + '\\nPlease check the console for more details.');
+            }
         }
         
-        // Add event listener for download button
-        document.getElementById('downloadPDF').addEventListener('click', generatePDF);
+        // Add event listener for download button when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const downloadButton = document.getElementById('downloadPDF');
+            if (downloadButton) {
+                downloadButton.addEventListener('click', generatePDF);
+                console.log("PDF download button event listener added");
+            } else {
+                console.log("PDF download button not found in DOM");
+            }
+        });
         
         // Auto-save individual responses to SCORM as user types
         document.querySelectorAll('textarea[required]').forEach((textarea, index) => {
