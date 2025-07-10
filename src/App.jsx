@@ -1350,28 +1350,6 @@ function ScenarioTab() {
             border-color: #663399;
             box-shadow: 0 0 0 3px rgba(102, 51, 153, 0.1);
         }
-        .instructor-section {
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 2px dashed #e0dde9;
-        }
-        .instructor-label {
-            font-weight: 600;
-            color: #663399;
-            margin-bottom: 0.5rem;
-            display: block;
-        }
-        .instructor-textarea {
-            width: 100%;
-            min-height: 120px;
-            padding: 1rem;
-            border: 2px dashed #663399;
-            border-radius: 8px;
-            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
-            font-size: 1rem;
-            background: #faf9ff;
-            resize: vertical;
-        }
         .instruction-text {
             font-size: 0.9rem;
             color: #666;
@@ -1400,6 +1378,22 @@ function ScenarioTab() {
         .submit-btn:hover {
             transform: translateY(-2px);
         }
+        .download-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
+            transition: transform 0.2s ease;
+            margin-left: 1rem;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+        }
         @media (max-width: 768px) {
             .container {
                 margin: 1rem;
@@ -1410,6 +1404,15 @@ function ScenarioTab() {
             }
             .scenario {
                 padding: 1.5rem;
+            }
+            .submit-section {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            .download-btn {
+                margin-left: 0;
+                margin-top: 1rem;
+                width: 100%;
             }
         }
     </style>
@@ -1423,7 +1426,7 @@ function ScenarioTab() {
         
         <div class="content">
             <div class="instruction-text">
-                Complete your responses below. Your instructor will review and provide feedback on each scenario.
+                Complete your responses below. Once finished, you can download a PDF of your completed assessment to submit to your instructor.
             </div>
             
             <form>`;
@@ -1444,16 +1447,6 @@ function ScenarioTab() {
                             required
                         ></textarea>
                         
-                        <div class="instructor-section">
-                            <label for="feedback-${index}" class="instructor-label">Instructor Feedback:</label>
-                            <textarea 
-                                id="feedback-${index}" 
-                                name="feedback-${index}" 
-                                class="instructor-textarea"
-                                placeholder="(This section will be completed by your instructor)"
-                                readonly
-                            ></textarea>
-                        </div>
                     </div>
                 </div>`;
     });
@@ -1463,10 +1456,12 @@ function ScenarioTab() {
         </div>
         
         <div class="submit-section">
-            <button type="submit" class="submit-btn">Submit Assessment</button>
+            <button type="submit" class="submit-btn">Complete Assessment</button>
+            <button type="button" class="download-btn" id="downloadPDF" style="display: none;">Download PDF for Submission</button>
         </div>
     </div>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
         // Enhanced SCORM API Interface for Adobe LMS Integration with Robust Error Handling
         var API = null;
@@ -1730,14 +1725,7 @@ function ScenarioTab() {
             debugLog("SCORM save status:", { scormSaved, scormCompleted, scormErrors });
             
             // Always provide success feedback - form submission always works
-            let message;
-            if (scormSaved && scormCompleted) {
-                message = '🎉 Assessment submitted successfully!\\n\\nYour responses have been saved to the LMS and are now available in your quiz reports for instructor review.';
-            } else if (isInitialized) {
-                message = '🎉 Assessment submitted successfully!\\n\\nYour responses were captured. If you don\\'t see this assessment in your LMS reports, please contact your instructor.';
-            } else {
-                message = '🎉 Assessment submitted successfully!\\n\\nYour responses have been recorded. Note: SCORM tracking is not available in this environment, but your instructor can still review your responses.';
-            }
+            let message = '🎉 Assessment completed successfully!\\n\\nYou can now download a PDF of your responses to submit to your instructor.';
             
             alert(message);
             
@@ -1745,8 +1733,12 @@ function ScenarioTab() {
             textareas.forEach(textarea => textarea.disabled = true);
             const submitButton = document.querySelector('button[type="submit"]');
             submitButton.disabled = true;
-            submitButton.textContent = '✅ Submitted Successfully';
+            submitButton.textContent = '✅ Assessment Completed';
             submitButton.style.backgroundColor = '#28a745';
+            
+            // Show download button
+            const downloadButton = document.getElementById('downloadPDF');
+            downloadButton.style.display = 'inline-block';
             
             // Log responses for debugging (instructor can check console if needed)
             console.log("Assessment Responses:");
@@ -1754,6 +1746,81 @@ function ScenarioTab() {
                 console.log("Scenario " + (index + 1) + ":", textarea.value.trim());
             });
         });
+        
+        // PDF Generation Function
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Get assessment title
+            const titleElement = document.querySelector('.header h1');
+            const title = titleElement ? titleElement.textContent : 'Scenario Assessment';
+            
+            // Add title
+            doc.setFontSize(20);
+            doc.setFont(undefined, 'bold');
+            doc.text(title, 20, 30);
+            
+            // Add date
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'normal');
+            doc.text('Completed on: ' + new Date().toLocaleDateString(), 20, 45);
+            
+            // Add student name (if available)
+            const studentName = prompt('Enter your name for the PDF:');
+            if (studentName) {
+                doc.text('Student: ' + studentName, 20, 55);
+            }
+            
+            let yPosition = 70;
+            
+            // Add each scenario and response
+            const textareas = document.querySelectorAll('textarea[required]');
+            textareas.forEach((textarea, index) => {
+                const scenarioElement = textarea.closest('.scenario').querySelector('.scenario-content');
+                const scenarioText = scenarioElement ? scenarioElement.textContent : 'Scenario ' + (index + 1);
+                const response = textarea.value.trim();
+                
+                // Check if we need a new page
+                if (yPosition > 250) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                // Add scenario title
+                doc.setFontSize(14);
+                doc.setFont(undefined, 'bold');
+                doc.text('Scenario ' + (index + 1), 20, yPosition);
+                yPosition += 10;
+                
+                // Add scenario content (wrap text)
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                const scenarioLines = doc.splitTextToSize(scenarioText, 170);
+                doc.text(scenarioLines, 20, yPosition);
+                yPosition += scenarioLines.length * 5 + 5;
+                
+                // Add response title
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('Response:', 20, yPosition);
+                yPosition += 10;
+                
+                // Add response content (wrap text)
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                const responseLines = doc.splitTextToSize(response || 'No response provided', 170);
+                doc.text(responseLines, 20, yPosition);
+                yPosition += responseLines.length * 5 + 15;
+            });
+            
+            // Save the PDF
+            const fileName = title.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+            doc.save(fileName);
+        }
+        
+        // Add event listener for download button
+        document.getElementById('downloadPDF').addEventListener('click', generatePDF);
         
         // Auto-save individual responses to SCORM as user types
         document.querySelectorAll('textarea[required]').forEach((textarea, index) => {
